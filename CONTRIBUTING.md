@@ -59,10 +59,14 @@ generated from the same source and cannot drift from it.
 ## Before opening a pull request
 
 ```bash
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --features full -- -D warnings
 cargo fmt --all --check
 cargo test --workspace
 ```
+
+`--all-features` is not the check to run: it turns on the CUDA and
+Vulkan accelerators, which need toolchains most machines do not have.
+`full` is whisper plus remote, which builds everywhere.
 
 Tests needing a real model file are marked ignored and do not run by
 default:

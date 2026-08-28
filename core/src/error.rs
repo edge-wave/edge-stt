@@ -13,7 +13,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("audio is {got}, and only {expected} can be transcribed")]
-    UnsupportedAudio { expected: AudioFormat, got: AudioFormat },
+    UnsupportedAudio {
+        expected: AudioFormat,
+        got: AudioFormat,
+    },
 
     #[error("audio runs {got:?}, past the {limit:?} this transcriber accepts")]
     AudioTooLong { limit: Duration, got: Duration },
@@ -50,7 +53,11 @@ pub enum Error {
     Cancelled,
 
     #[error("{setting} is {got}, expected {expected}")]
-    InvalidValue { setting: &'static str, expected: String, got: String },
+    InvalidValue {
+        setting: &'static str,
+        expected: String,
+        got: String,
+    },
 
     #[error("this build has no {backend} backend; enable the feature")]
     BackendUnavailable { backend: &'static str },

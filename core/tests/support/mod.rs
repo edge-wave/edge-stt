@@ -5,6 +5,9 @@
 
 use std::path::PathBuf;
 
+#[cfg(feature = "remote")]
+pub mod stub_server;
+
 /// Where the operator put their Whisper files, the same way edge-ear
 /// finds wake word models.
 pub fn model_path() -> PathBuf {
@@ -15,11 +18,15 @@ pub fn model_path() -> PathBuf {
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| {
             path.extension().is_some_and(|e| e == "bin")
-                && path.file_name().is_some_and(|n| n.to_string_lossy().starts_with("ggml-"))
+                && path
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("ggml-"))
         })
         .collect();
     candidates.sort();
-    candidates.pop().unwrap_or_else(|| panic!("no ggml-*.bin under {dir}"))
+    candidates
+        .pop()
+        .unwrap_or_else(|| panic!("no ggml-*.bin under {dir}"))
 }
 
 /// A recording of known speech, and the words in it.
@@ -37,7 +44,10 @@ pub fn read_wav(path: &str) -> Vec<i16> {
     assert_eq!(spec.sample_rate, 16_000, "{path} must be 16 kHz");
     assert_eq!(spec.channels, 1, "{path} must be mono");
     assert_eq!(spec.bits_per_sample, 16, "{path} must be 16-bit");
-    reader.samples::<i16>().map(|s| s.expect("a readable sample")).collect()
+    reader
+        .samples::<i16>()
+        .map(|s| s.expect("a readable sample"))
+        .collect()
 }
 
 pub fn silence(seconds: f32) -> Vec<i16> {

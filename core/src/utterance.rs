@@ -19,7 +19,11 @@ pub struct Utterance<'a> {
 
 impl<'a> Utterance<'a> {
     pub fn new(samples: &'a [i16], format: AudioFormat) -> Self {
-        Self { samples, format, captured_at: None }
+        Self {
+            samples,
+            format,
+            captured_at: None,
+        }
     }
 
     /// What edge-ear hands over at end of speech.
@@ -45,7 +49,10 @@ impl<'a> Utterance<'a> {
         self.format.check_transcribable()?;
         let duration = self.duration();
         if duration > max_duration {
-            return Err(Error::AudioTooLong { limit: max_duration, got: duration });
+            return Err(Error::AudioTooLong {
+                limit: max_duration,
+                got: duration,
+            });
         }
         Ok(())
     }

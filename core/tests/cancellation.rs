@@ -23,7 +23,10 @@ fn cancelling_before_the_start_returns_at_once() {
     let outcome = stt.transcribe_with(&Utterance::mono_16k(&samples), |_| {}, &cancel);
 
     assert!(matches!(outcome, Err(Error::Cancelled)));
-    assert!(started.elapsed() < Duration::from_secs(1), "it should not have decoded anything");
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "it should not have decoded anything"
+    );
 }
 
 #[test]
@@ -44,7 +47,10 @@ fn cancelling_from_another_thread_stops_the_decoder() {
     let outcome = stt.transcribe_with(&Utterance::mono_16k(&long), |_| {}, &cancel);
 
     assert!(matches!(outcome, Err(Error::Cancelled)), "got {outcome:?}");
-    assert!(started.elapsed() < Duration::from_secs(30), "cancelling should not wait for the end");
+    assert!(
+        started.elapsed() < Duration::from_secs(30),
+        "cancelling should not wait for the end"
+    );
 }
 
 #[test]
