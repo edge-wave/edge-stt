@@ -107,7 +107,7 @@ known transcripts, silence produces an empty transcript, and nothing reaches for
 - [X] T041 [P] [US1] Write `core/examples/transcribe.rs`: read a wav, print the text, the model, the audio duration, and the decoding time
 - [X] T042 [US1] Add `--bench` to `core/examples/transcribe.rs`, reporting the three figures an integrator chooses a model size with: decoding time against audio duration, time to first partial, and peak memory
 - [X] T043 [US1] Write `core/tests/overhead.rs`: transcription takes no more than 10% longer than the same model through whisper.cpp's own tooling on the same machine and audio — the one speed claim this project makes about itself
-- [ ] T044 [US1] Run `--bench` on both reference machines for every supported model size in Korean and English, and record the raw figures in `docs/measurements.md`. The plan schedules this early on purpose: nothing downstream may quote a latency number that did not come out of it
+- [ ] T044 [BLOCKED: no reference hardware, and the local machine is too loaded to measure anything] [US1] Run `--bench` on both reference machines for every supported model size in Korean and English, and record the raw figures in `docs/measurements.md`. The plan schedules this early on purpose: nothing downstream may quote a latency number that did not come out of it
 
 **Checkpoint**: An edge device transcribes speech with no network, no account, and no server.
 This is the MVP.
