@@ -9,26 +9,34 @@ cargo run --release --example transcribe -- --bench MODEL sample.wav
 
 ## What has actually been measured
 
-One machine so far, and the figure below is a warning rather than a
-guide.
+Nothing usable. One figure was taken and it is void.
 
 | Machine | Build | Model | Audio | Decoding | Real-time factor |
 |---|---|---|---|---|---|
-| Apple Silicon laptop | default features, no GPU | `ggml-tiny-q5_1` | 2.71 s | 296 s | **109x** |
+| Apple Silicon laptop | default features, no GPU | `ggml-tiny-q5_1` | 2.71 s | 296 s | 109x, **meaningless** |
 
-That is not what a tiny model costs on Apple Silicon. It is what
-whisper.cpp costs when it has been built without a GPU backend and
-without the processor's own vector instructions:
+The machine was carrying a load average of 175 across 12 cores at the
+time -- dozens of unrelated processes spinning. A decoder given a
+fifteenth of a core tells you about the machine's queue, not about the
+model. Do not quote this number or reason from it.
+
+There is one real observation from the same run, unaffected by load:
 
 ```
 whisper_backend_init_gpu: no GPU found
 whisper_backend_init: using BLAS backend
 ```
 
-The default `whisper-rs` build passes `-DGGML_METAL=OFF`, and turning
-on the `metal` feature did not change what the running binary reported.
-Until that is sorted out, **no figure from this machine means
-anything**, and none should be quoted.
+Metal was not compiled in, even with the `metal` feature turned on.
+That is worth chasing on its own account, but it is not what produced
+the 109x above, and the two should not be confused.
+
+**Measure on a quiet machine.** Check first:
+
+```bash
+uptime          # load average well under the core count
+sysctl -n hw.ncpu
+```
 
 ## Still to measure
 
