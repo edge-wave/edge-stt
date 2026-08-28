@@ -1,0 +1,10 @@
+/target
+/models
+*.rs.bk
+.DS_Store
+
+# Notes and local tooling. They live beside the repository, not in it.
+/.claude
+/.specify
+/specs
+/CLAUDE.md

@@ -1,0 +1,33 @@
+# Third-party licences
+
+## Model weights
+
+None are here. edge-stt ships no model, and there is no `assets`
+directory to put one in. The operator supplies the file, and the
+library says which one it wants.
+
+Before referencing a model anywhere in this repository — the README, a
+test fixture, the measurement table — write it down below: what it is,
+who published it, under what licence, where it came from, and the
+checksum of the exact file that was used.
+
+### Whisper (OpenAI)
+
+The on-device backend runs Whisper in the GGML form whisper.cpp reads.
+The weights are published by OpenAI under the MIT licence, and the GGML
+conversions used in the documentation come from the whisper.cpp model
+repository.
+
+| File | Origin | SHA-256 |
+|------|--------|---------|
+| _(fill in when a specific file is referenced)_ | | |
+
+## Rust dependencies
+
+Recorded by Cargo, not restated here. `cargo tree` and `cargo license`
+give the current answer; a copy in this file would be stale within a
+release.
+
+The one dependency worth naming is `whisper-rs`, which builds
+whisper.cpp — MIT, by Georgi Gerganov and contributors. It is why this
+project needs a C++ toolchain and edge-ear does not.

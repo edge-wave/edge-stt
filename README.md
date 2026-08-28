@@ -1,0 +1,97 @@
+# edge-stt
+
+Turn a recording into text. On the device, or on a server you run —
+the calling code is the same either way.
+
+The other half of [edge-ear](https://github.com/edge-wave/edge-ear),
+which listens, hears a wake word, and hands you the recording once the
+speaker goes quiet. edge-stt takes that recording and tells you what
+was said.
+
+## What it does
+
+- Turns a finished recording into text, using Whisper
+- Runs the model on the device, with no network at all
+- Or sends the audio to a server you started, chosen by configuration
+  and nothing else
+- Hands you the words as they are decoded, if you want them early
+- Reports what each transcript cost, so you can tell whether the
+  hardware is keeping up
+
+## What it does not do
+
+- Listen, detect a wake word, or decide when speech ended. That is
+  edge-ear's job
+- Write replies or turn text into speech
+- Ship a model. You supply the file
+- Choose a model size for you. Your board, your language, your call
+- Run on Windows yet
+
+## Transcribing
+
+```rust
+use edge_stt_core::{Config, EdgeStt, ModelSpec, Utterance};
+
+let stt = EdgeStt::new(Config::local(ModelSpec::at("models/ggml-base-q5_0.bin")))?;
+let transcript = stt.transcribe(&Utterance::mono_16k(&samples))?;
+println!("{}", transcript.text);
+```
+
+Nothing above reaches the network, and with default features there is
+no network code in the build to reach it with.
+
+To use a server instead, change the configuration and nothing else:
+
+```rust
+let stt = EdgeStt::new(Config::remote(RemoteConfig::at("ws://host:8000/api/v1/transcribe")))?;
+```
+
+That needs the `remote` feature, which is off by default.
+
+## Models
+
+| What | Who supplies it |
+|------|-----------------|
+| Whisper weights | You do |
+
+Whisper is MIT, and the GGML files whisper.cpp reads are published
+alongside it. Which size to run is your decision — a small board and a
+large model is a choice this library will not refuse, and every
+transcript tells you what it cost. See `docs/measurements.md` for
+figures on the machines we measured.
+
+## Building
+
+whisper.cpp is C++, so this needs a C++ toolchain and CMake. edge-ear
+does not, and that is the one way edge-stt is heavier to build.
+
+```bash
+sudo apt install build-essential cmake pkg-config   # Linux
+xcode-select --install && brew install cmake        # macOS
+
+cargo build --workspace
+cargo test --workspace
+```
+
+Tests needing a real model file are marked ignored:
+
+```bash
+EDGE_STT_MODEL_DIR=~/models/whisper cargo test --workspace -- --ignored
+```
+
+## Python
+
+```bash
+cd py && maturin develop
+```
+
+```python
+from edge_stt import EdgeStt
+
+with EdgeStt(model="models/ggml-base-q5_0.bin") as stt:
+    print(stt.transcribe(samples, sample_rate=16000).text)
+```
+
+## Licence
+
+MIT or Apache-2.0, your choice.
