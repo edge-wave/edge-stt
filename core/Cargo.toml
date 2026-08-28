@@ -1,0 +1,49 @@
+[package]
+name = "edge-stt-core"
+description = "Speech to text at the edge: on the device, or on a server you run"
+keywords = ["speech", "stt", "whisper", "transcription", "offline"]
+categories = ["multimedia::audio"]
+readme = "../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = ["whisper"]
+# The on-device backend. Turning it off leaves the backend trait in
+# place, so another runtime can take over without dragging whisper.cpp in.
+whisper = ["dep:whisper-rs"]
+# Accelerators. Asking for one the build does not carry is an error at
+# construction, never a quiet fall back to the processor.
+metal = ["whisper", "whisper-rs/metal"]
+cuda = ["whisper", "whisper-rs/cuda"]
+vulkan = ["whisper", "whisper-rs/vulkan"]
+# Reaching a server. Off by default, so a plain build has no socket
+# code in it at all.
+remote = [
+    "dep:tokio",
+    "dep:tokio-tungstenite",
+    "dep:futures-util",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:uuid",
+]
+
+[dependencies]
+log.workspace = true
+thiserror.workspace = true
+
+whisper-rs = { workspace = true, optional = true }
+
+tokio = { workspace = true, optional = true, features = ["rt", "net", "time", "sync", "macros"] }
+tokio-tungstenite = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+
+[dev-dependencies]
+hound.workspace = true
