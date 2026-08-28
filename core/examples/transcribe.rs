@@ -21,8 +21,27 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
+    // The whole of switching to a server: one setting, no code.
     #[allow(unused_mut)]
-    let mut config = Config::local(ModelSpec::at(&args.model));
+    let mut config = match std::env::var("EDGE_STT_ENDPOINT") {
+        Ok(endpoint) => {
+            #[cfg(feature = "remote")]
+            {
+                let mut remote = edge_stt_core::RemoteConfig::at(endpoint);
+                if let Ok(token) = std::env::var("EDGE_STT_TOKEN") {
+                    remote = remote.with_credential(token);
+                }
+                Config::remote(remote)
+            }
+            #[cfg(not(feature = "remote"))]
+            {
+                let _ = endpoint;
+                eprintln!("this build has no remote backend; rebuild with --features remote");
+                return ExitCode::FAILURE;
+            }
+        }
+        Err(_) => Config::local(ModelSpec::at(&args.model)),
+    };
     if let Some(tag) = &args.language {
         config = config.with_language(Language::new(tag));
     }

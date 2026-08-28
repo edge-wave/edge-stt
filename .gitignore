@@ -2,6 +2,7 @@
 /models
 *.rs.bk
 .DS_Store
+/capi/docs
 
 # Notes and local tooling. They live beside the repository, not in it.
 /.claude
