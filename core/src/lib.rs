@@ -9,6 +9,8 @@ pub mod config;
 pub mod error;
 pub mod transcript;
 pub mod utterance;
+#[cfg(feature = "remote")]
+pub mod wire;
 
 pub use cancel::CancelToken;
 pub use config::{
@@ -72,20 +74,39 @@ impl EdgeStt {
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let mut work = Work {
-            on_partial: if self.config.want_partials { on_partial } else { None },
-            cancel,
-            timeout: self.config.timeout,
-        };
+        let mut work = Work::new(cancel);
+        work.timeout = self.config.timeout;
+        work.on_partial = on_partial;
         self.backend.transcribe(utterance, &mut work)
     }
 }
 
 fn build_backend(config: &Config) -> Result<Box<dyn Backend>> {
-    match &config.backend {
-        BackendChoice::Local(model) => build_local(model, config),
-        BackendChoice::Remote(_) => Err(Error::BackendUnavailable { backend: "remote" }),
+    let primary = match &config.backend {
+        BackendChoice::Local(model) => return build_local(model, config),
+        BackendChoice::Remote(remote) => build_remote(remote, config)?,
+    };
+    match &config.fallback_to_local {
+        None => Ok(primary),
+        Some(model) => {
+            let local = build_local(model, config)?;
+            Ok(Box::new(backend::fallback::FallbackBackend::new(
+                primary, local,
+            )))
+        }
     }
+}
+
+#[cfg(feature = "remote")]
+fn build_remote(remote: &RemoteConfig, config: &Config) -> Result<Box<dyn Backend>> {
+    Ok(Box::new(backend::remote::RemoteBackend::connect(
+        remote, config,
+    )?))
+}
+
+#[cfg(not(feature = "remote"))]
+fn build_remote(_remote: &RemoteConfig, _config: &Config) -> Result<Box<dyn Backend>> {
+    Err(Error::BackendUnavailable { backend: "remote" })
 }
 
 #[cfg(feature = "whisper")]

@@ -39,7 +39,9 @@ impl WhisperBackend {
     /// here rather than on the first spoken word.
     pub fn load(model: &ModelSpec, config: &Config) -> Result<Self> {
         if !model.path.is_file() {
-            return Err(Error::ModelMissing { path: model.path.clone() });
+            return Err(Error::ModelMissing {
+                path: model.path.clone(),
+            });
         }
 
         let accelerator = model.accelerator.unwrap_or_default();
@@ -49,7 +51,10 @@ impl WhisperBackend {
         parameters.use_gpu(accelerator != Accelerator::Cpu);
 
         let context = WhisperContext::new_with_params(&model.path, parameters).map_err(|why| {
-            Error::ModelUnusable { path: model.path.clone(), why: why.to_string() }
+            Error::ModelUnusable {
+                path: model.path.clone(),
+                why: why.to_string(),
+            }
         })?;
 
         if let Some(language) = &config.language
@@ -62,7 +67,11 @@ impl WhisperBackend {
             });
         }
 
-        Ok(Self { context, model: model.clone(), language: config.language.clone() })
+        Ok(Self {
+            context,
+            model: model.clone(),
+            language: config.language.clone(),
+        })
     }
 
     pub fn facts(&self) -> ModelFacts {
@@ -78,7 +87,9 @@ impl WhisperBackend {
     }
 
     fn reported_language(&self) -> Language {
-        self.language.clone().unwrap_or_else(|| Language::new("auto"))
+        self.language
+            .clone()
+            .unwrap_or_else(|| Language::new("auto"))
     }
 }
 
@@ -202,7 +213,11 @@ impl WhisperBackend {
                 // None asks whisper.cpp to detect and then transcribe;
                 // its detect_language flag detects and stops there.
                 params.set_language(language.as_deref());
-                let mut stop = Box::new(Stop { cancel, deadline, timed_out });
+                let mut stop = Box::new(Stop {
+                    cancel,
+                    deadline,
+                    timed_out,
+                });
                 // whisper-rs's safe wrapper aborts the encoder even when
                 // the closure says otherwise, so the trampoline is ours.
                 unsafe {
@@ -216,10 +231,12 @@ impl WhisperBackend {
                     });
                 }
 
-                let decoded = state.full(params, audio).map_err(|why| Error::ModelUnusable {
-                    path: model_path.clone(),
-                    why: why.to_string(),
-                });
+                let decoded = state
+                    .full(params, audio)
+                    .map_err(|why| Error::ModelUnusable {
+                        path: model_path.clone(),
+                        why: why.to_string(),
+                    });
                 // Outlives the decode by construction; dropping it any
                 // earlier would leave the callback a dangling handle.
                 drop(stop);
@@ -264,7 +281,10 @@ fn collect(state: &WhisperState) -> Result<Decoded> {
     }
 
     let language = get_lang_str(state.full_lang_id_from_state()).unwrap_or("auto");
-    Ok(Decoded { segments, language: Language::new(language) })
+    Ok(Decoded {
+        segments,
+        language: Language::new(language),
+    })
 }
 
 fn partial_from(seq: &mut u32, data: SegmentCallbackData) -> Partial {

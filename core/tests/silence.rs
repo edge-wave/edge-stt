@@ -13,8 +13,14 @@ fn transcriber() -> EdgeStt {
 #[ignore = "needs a Whisper model"]
 fn silence_comes_back_empty() {
     let samples = support::silence(3.0);
-    let transcript = transcriber().transcribe(&Utterance::mono_16k(&samples)).expect("a result");
-    assert!(transcript.is_empty(), "silence produced {:?}", transcript.text);
+    let transcript = transcriber()
+        .transcribe(&Utterance::mono_16k(&samples))
+        .expect("a result");
+    assert!(
+        transcript.is_empty(),
+        "silence produced {:?}",
+        transcript.text
+    );
     assert_eq!(transcript.audio_duration, std::time::Duration::from_secs(3));
 }
 
@@ -22,15 +28,23 @@ fn silence_comes_back_empty() {
 #[ignore = "needs a Whisper model"]
 fn hiss_comes_back_empty() {
     let samples = support::noise(3.0);
-    let transcript = transcriber().transcribe(&Utterance::mono_16k(&samples)).expect("a result");
-    assert!(transcript.is_empty(), "noise produced {:?}", transcript.text);
+    let transcript = transcriber()
+        .transcribe(&Utterance::mono_16k(&samples))
+        .expect("a result");
+    assert!(
+        transcript.is_empty(),
+        "noise produced {:?}",
+        transcript.text
+    );
 }
 
 #[test]
 #[ignore = "needs a Whisper model"]
 fn a_fifth_of_a_second_is_silence_rather_than_an_error() {
     let samples = support::silence(0.2);
-    let transcript = transcriber().transcribe(&Utterance::mono_16k(&samples)).expect("a result");
+    let transcript = transcriber()
+        .transcribe(&Utterance::mono_16k(&samples))
+        .expect("a result");
     assert!(transcript.is_empty());
     assert!(transcript.audio_duration > std::time::Duration::ZERO);
 }
