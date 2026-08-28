@@ -246,6 +246,11 @@ impl WhisperBackend {
 
             let mut seq = 0u32;
             for data in receiver {
+                // Filtered here as well as at the end, so joining the
+                // partials still gives the final text exactly.
+                if is_annotation(&data.text) {
+                    continue;
+                }
                 work.emit(partial_from(&mut seq, data));
             }
             worker.join()
@@ -272,6 +277,9 @@ fn collect(state: &WhisperState) -> Result<Decoded> {
             Ok(Cow::Owned(text)) => text,
             Err(_) => continue,
         };
+        if is_annotation(&text) {
+            continue;
+        }
         segments.push(Segment {
             text,
             start: centiseconds(segment.start_timestamp()),
@@ -285,6 +293,15 @@ fn collect(state: &WhisperState) -> Result<Decoded> {
         segments,
         language: Language::new(language),
     })
+}
+
+/// whisper.cpp writes what it heard instead of words when there were
+/// none: "[BLANK_AUDIO]", "(music)". Those are notes, not speech.
+fn is_annotation(text: &str) -> bool {
+    let trimmed = text.trim();
+    let wrapped = (trimmed.starts_with('[') && trimmed.ends_with(']'))
+        || (trimmed.starts_with('(') && trimmed.ends_with(')'));
+    wrapped && !trimmed[1..trimmed.len() - 1].contains(['[', ']', '(', ')'])
 }
 
 fn partial_from(seq: &mut u32, data: SegmentCallbackData) -> Partial {
