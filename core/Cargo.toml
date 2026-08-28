@@ -16,6 +16,9 @@ default = ["whisper"]
 # The on-device backend. Turning it off leaves the backend trait in
 # place, so another runtime can take over without dragging whisper.cpp in.
 whisper = ["dep:whisper-rs"]
+# Everything that builds anywhere. The accelerators below need their
+# own toolchains, so --all-features is not the check to run.
+full = ["whisper", "remote"]
 # Accelerators. Asking for one the build does not carry is an error at
 # construction, never a quiet fall back to the processor.
 metal = ["whisper", "whisper-rs/metal"]
@@ -47,3 +50,7 @@ uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
 hound.workspace = true
+tokio = { workspace = true, features = ["rt", "net", "time", "sync", "macros"] }
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true

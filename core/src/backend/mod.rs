@@ -9,6 +9,9 @@ use crate::error::Result;
 use crate::transcript::{Partial, Transcript};
 use crate::utterance::Utterance;
 
+pub mod fallback;
+#[cfg(feature = "remote")]
+pub mod remote;
 #[cfg(feature = "whisper")]
 pub mod whisper;
 
@@ -17,11 +20,17 @@ pub struct Work<'a> {
     pub on_partial: Option<&'a mut dyn FnMut(Partial)>,
     pub cancel: &'a CancelToken,
     pub timeout: Option<Duration>,
+    emitted: u32,
 }
 
 impl<'a> Work<'a> {
     pub fn new(cancel: &'a CancelToken) -> Self {
-        Self { on_partial: None, cancel, timeout: None }
+        Self {
+            on_partial: None,
+            cancel,
+            timeout: None,
+            emitted: 0,
+        }
     }
 
     pub fn wants_partials(&self) -> bool {
@@ -30,8 +39,15 @@ impl<'a> Work<'a> {
 
     pub fn emit(&mut self, partial: Partial) {
         if let Some(sink) = self.on_partial.as_mut() {
+            self.emitted += 1;
             sink(partial);
         }
+    }
+
+    /// Falling back after the caller has already seen words would
+    /// restart the sequence and contradict what they were shown.
+    pub fn nothing_delivered_yet(&self) -> bool {
+        self.emitted == 0
     }
 }
 

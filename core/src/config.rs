@@ -34,7 +34,11 @@ pub struct AudioFormat {
 
 impl AudioFormat {
     pub const fn new(sample_rate: u32, channels: u16, sample_type: SampleType) -> Self {
-        Self { sample_rate, channels, sample_type }
+        Self {
+            sample_rate,
+            channels,
+            sample_type,
+        }
     }
 
     /// 16 kHz mono 16-bit. What edge-ear hands over at end of speech,
@@ -50,7 +54,10 @@ impl AudioFormat {
         if *self == expected {
             Ok(())
         } else {
-            Err(Error::UnsupportedAudio { expected, got: *self })
+            Err(Error::UnsupportedAudio {
+                expected,
+                got: *self,
+            })
         }
     }
 }
@@ -157,7 +164,8 @@ impl ModelSpec {
     /// Every physical core unless the caller said otherwise.
     pub fn thread_count(&self) -> u16 {
         self.threads.unwrap_or_else(|| {
-            std::thread::available_parallelism().map_or(4, |n| n.get().min(u16::MAX as usize) as u16)
+            std::thread::available_parallelism()
+                .map_or(4, |n| n.get().min(u16::MAX as usize) as u16)
         })
     }
 }
@@ -273,7 +281,6 @@ pub struct Config {
     pub backend: BackendChoice,
     pub fallback_to_local: Option<ModelSpec>,
     pub language: Option<Language>,
-    pub want_partials: bool,
     pub timeout: Option<Duration>,
     pub max_duration: Duration,
 }
@@ -292,7 +299,6 @@ impl Config {
             backend,
             fallback_to_local: None,
             language: None,
-            want_partials: false,
             timeout: None,
             max_duration: Duration::from_secs(300),
         }
@@ -307,11 +313,6 @@ impl Config {
 
     pub fn with_language(mut self, language: Language) -> Self {
         self.language = Some(language);
-        self
-    }
-
-    pub fn with_partials(mut self) -> Self {
-        self.want_partials = true;
         self
     }
 

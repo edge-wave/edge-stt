@@ -14,7 +14,11 @@ fn the_model_is_what_the_documentation_claims() {
     let backend = WhisperBackend::load(&spec, &Config::local(spec.clone())).expect("a model");
     let facts = backend.facts();
 
-    assert!(facts.vocabulary > 50_000, "a Whisper vocabulary, got {}", facts.vocabulary);
+    assert!(
+        facts.vocabulary > 50_000,
+        "a Whisper vocabulary, got {}",
+        facts.vocabulary
+    );
     assert!(facts.audio_context > 0);
     assert!(!facts.description.is_empty());
     assert!(

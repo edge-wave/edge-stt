@@ -44,7 +44,7 @@ before expecting real-time on a small board.
 The same three commands edge-ear's CONTRIBUTING requires before a pull request:
 
 ```bash
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --features full -- -D warnings
 cargo fmt --all --check
 cargo test --workspace
 ```

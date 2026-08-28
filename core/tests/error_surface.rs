@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use edge_stt_core::config::{AudioFormat, Secret};
 use edge_stt_core::Error;
+use edge_stt_core::config::{AudioFormat, Secret};
 
 fn one_of_each() -> Vec<Error> {
     vec![
@@ -13,30 +13,53 @@ fn one_of_each() -> Vec<Error> {
             expected: AudioFormat::mono_16k(),
             got: AudioFormat::new(44_100, 2, edge_stt_core::SampleType::F32),
         },
-        Error::AudioTooLong { limit: Duration::from_secs(300), got: Duration::from_secs(600) },
-        Error::ModelMissing { path: PathBuf::from("/models/ggml-base.bin") },
+        Error::AudioTooLong {
+            limit: Duration::from_secs(300),
+            got: Duration::from_secs(600),
+        },
+        Error::ModelMissing {
+            path: PathBuf::from("/models/ggml-base.bin"),
+        },
         Error::ModelUnusable {
             path: PathBuf::from("/models/ggml-base.bin"),
             why: "not a whisper model".to_string(),
         },
-        Error::InsufficientResources { size: "large-v3".to_string(), short: "memory".to_string() },
-        Error::Network { endpoint: "ws://host:8000".to_string(), why: "refused".to_string() },
-        Error::CredentialRejected { endpoint: "ws://host:8000".to_string() },
+        Error::InsufficientResources {
+            size: "large-v3".to_string(),
+            short: "memory".to_string(),
+        },
+        Error::Network {
+            endpoint: "ws://host:8000".to_string(),
+            why: "refused".to_string(),
+        },
+        Error::CredentialRejected {
+            endpoint: "ws://host:8000".to_string(),
+        },
         Error::ServerAtCapacity {
             endpoint: "ws://host:8000".to_string(),
             queue_position: Some(3),
             retry_after: Some(Duration::from_secs(2)),
         },
-        Error::ServerError { endpoint: "ws://host:8000".to_string(), why: "boom".to_string() },
-        Error::Timeout { limit: Duration::from_secs(10) },
+        Error::ServerError {
+            endpoint: "ws://host:8000".to_string(),
+            why: "boom".to_string(),
+        },
+        Error::Timeout {
+            limit: Duration::from_secs(10),
+        },
         Error::Cancelled,
     ]
 }
 
 #[test]
 fn a_dead_host_never_reads_as_a_bad_credential() {
-    let dead = Error::Network { endpoint: "ws://host".to_string(), why: "refused".to_string() };
-    let refused = Error::CredentialRejected { endpoint: "ws://host".to_string() };
+    let dead = Error::Network {
+        endpoint: "ws://host".to_string(),
+        why: "refused".to_string(),
+    };
+    let refused = Error::CredentialRejected {
+        endpoint: "ws://host".to_string(),
+    };
     assert!(matches!(dead, Error::Network { .. }));
     assert!(matches!(refused, Error::CredentialRejected { .. }));
     assert_ne!(dead.to_string(), refused.to_string());
@@ -47,10 +70,18 @@ fn a_dead_host_never_reads_as_a_bad_credential() {
 #[test]
 fn cancellation_is_not_a_timeout() {
     assert!(!Error::Cancelled.is_retryable());
-    assert!(Error::Timeout { limit: Duration::from_secs(1) }.is_retryable());
+    assert!(
+        Error::Timeout {
+            limit: Duration::from_secs(1)
+        }
+        .is_retryable()
+    );
     assert_ne!(
         Error::Cancelled.to_string(),
-        Error::Timeout { limit: Duration::from_secs(1) }.to_string()
+        Error::Timeout {
+            limit: Duration::from_secs(1)
+        }
+        .to_string()
     );
 }
 

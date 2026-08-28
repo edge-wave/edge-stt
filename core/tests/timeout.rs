@@ -25,7 +25,10 @@ fn a_limit_shorter_than_the_work_is_reported_as_a_timeout() {
         Err(Error::Timeout { limit: reported }) => assert_eq!(reported, limit),
         other => panic!("expected a timeout, got {other:?}"),
     }
-    assert!(waited < Duration::from_secs(20), "it waited {waited:?}, well past the limit");
+    assert!(
+        waited < Duration::from_secs(20),
+        "it waited {waited:?}, well past the limit"
+    );
 }
 
 #[test]
@@ -40,8 +43,14 @@ fn a_timeout_is_not_a_cancellation() {
     let cancel = CancelToken::new();
 
     let outcome = stt.transcribe_with(&Utterance::mono_16k(&long), |_| {}, &cancel);
-    assert!(matches!(outcome, Err(Error::Timeout { .. })), "got {outcome:?}");
-    assert!(!cancel.is_cancelled(), "nothing cancelled this; the limit ran out");
+    assert!(
+        matches!(outcome, Err(Error::Timeout { .. })),
+        "got {outcome:?}"
+    );
+    assert!(
+        !cancel.is_cancelled(),
+        "nothing cancelled this; the limit ran out"
+    );
 }
 
 #[test]
@@ -52,6 +61,13 @@ fn a_generous_limit_lets_the_work_finish() {
     let stt = EdgeStt::new(config).expect("a model");
     let (samples, expected) = support::spoken_sample();
 
-    let transcript = stt.transcribe(&Utterance::mono_16k(&samples)).expect("a transcript");
-    assert!(transcript.text.to_lowercase().contains(&expected.to_lowercase()));
+    let transcript = stt
+        .transcribe(&Utterance::mono_16k(&samples))
+        .expect("a transcript");
+    assert!(
+        transcript
+            .text
+            .to_lowercase()
+            .contains(&expected.to_lowercase())
+    );
 }

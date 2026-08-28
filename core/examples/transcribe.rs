@@ -21,12 +21,10 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
+    #[allow(unused_mut)]
     let mut config = Config::local(ModelSpec::at(&args.model));
     if let Some(tag) = &args.language {
         config = config.with_language(Language::new(tag));
-    }
-    if args.partials {
-        config = config.with_partials();
     }
 
     let loading = Instant::now();
@@ -83,7 +81,9 @@ fn run(stt: &EdgeStt, samples: &[i16], args: &Args) -> edge_stt_core::Result<Tra
     if args.partials {
         println!();
     }
-    if args.bench && let Some(at) = first_partial {
+    if args.bench
+        && let Some(at) = first_partial
+    {
         println!("first partial after {at:.2?}");
     }
     Ok(transcript)
@@ -107,8 +107,13 @@ fn report(wav: &str, transcript: &Transcript, args: &Args) {
 }
 
 fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
-    let mut parsed =
-        Args { partials: false, bench: false, language: None, model: String::new(), wavs: vec![] };
+    let mut parsed = Args {
+        partials: false,
+        bench: false,
+        language: None,
+        model: String::new(),
+        wavs: vec![],
+    };
     let mut positional = Vec::new();
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -135,5 +140,8 @@ fn read_wav(path: &str) -> Result<Vec<i16>, String> {
             spec.sample_rate, spec.channels, spec.bits_per_sample
         ));
     }
-    reader.samples::<i16>().collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    reader
+        .samples::<i16>()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }

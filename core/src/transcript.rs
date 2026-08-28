@@ -80,6 +80,11 @@ pub struct Partial {
 
 impl Partial {
     pub fn append(seq: u32, text: impl Into<String>, segment: Option<Segment>) -> Self {
-        Self { seq, kind: PartialKind::Append, text: text.into(), segment }
+        Self {
+            seq,
+            kind: PartialKind::Append,
+            text: text.into(),
+            segment,
+        }
     }
 }

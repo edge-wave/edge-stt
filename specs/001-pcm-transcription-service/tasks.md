@@ -106,7 +106,7 @@ known transcripts, silence produces an empty transcript, and nothing reaches for
 - [X] T040 [P] [US1] Write `core/examples/probe_model.rs`, printing a model's real inputs and outputs — the same tool edge-ear tells contributors to run before trusting a model
 - [X] T041 [P] [US1] Write `core/examples/transcribe.rs`: read a wav, print the text, the model, the audio duration, and the decoding time
 - [X] T042 [US1] Add `--bench` to `core/examples/transcribe.rs`, reporting the three figures an integrator chooses a model size with: decoding time against audio duration, time to first partial, and peak memory
-- [ ] T043 [US1] Write `core/tests/overhead.rs`: transcription takes no more than 10% longer than the same model through whisper.cpp's own tooling on the same machine and audio — the one speed claim this project makes about itself
+- [X] T043 [US1] Write `core/tests/overhead.rs`: transcription takes no more than 10% longer than the same model through whisper.cpp's own tooling on the same machine and audio — the one speed claim this project makes about itself
 - [ ] T044 [US1] Run `--bench` on both reference machines for every supported model size in Korean and English, and record the raw figures in `docs/measurements.md`. The plan schedules this early on purpose: nothing downstream may quote a latency number that did not come out of it
 
 **Checkpoint**: An edge device transcribes speech with no network, no account, and no server.
@@ -124,22 +124,22 @@ gets the right distinct failure instead of a hang.
 
 ### Tests for User Story 2
 
-- [ ] T045 [US2] Write `core/tests/support/stub_server.rs`: a test-only server speaking the protocol in [contracts/websocket-protocol.md](./contracts/websocket-protocol.md), with switches for every fault the tests need. This is not the real server, which is User Story 4 — it exists so this story can be finished without it
-- [ ] T046 [P] [US2] Write `core/tests/remote_basic.rs`: a recording sent to the stub comes back as a transcript reporting the remote backend
-- [ ] T047 [P] [US2] Write `core/tests/backend_parity.rs`: one body of caller code, run against both backends, yields the same transcript shape and the same text. This test is what keeps the two from drifting apart later
-- [ ] T048 [P] [US2] Write `core/tests/remote_faults.rs`: host down gives a network error, a wrong credential gives a rejected-credential error, a connection dropped mid-request gives a network error with nothing presented as final, and a stalled server gives a timeout at the configured limit and not later
-- [ ] T049 [P] [US2] Write `core/tests/remote_config.rs`: building a remote transcriber with no endpoint fails at construction, and no default endpoint string exists anywhere in the crate
-- [ ] T050 [P] [US2] Write `core/tests/fallback.rs`: with fallback enabled a failing remote is retried locally and the transcript says so; with fallback off — the default — the remote failure surfaces untouched
+- [X] T045 [US2] Write `core/tests/support/stub_server.rs`: a test-only server speaking the protocol in [contracts/websocket-protocol.md](./contracts/websocket-protocol.md), with switches for every fault the tests need. This is not the real server, which is User Story 4 — it exists so this story can be finished without it
+- [X] T046 [P] [US2] Write `core/tests/remote_basic.rs`: a recording sent to the stub comes back as a transcript reporting the remote backend
+- [X] T047 [P] [US2] Write `core/tests/backend_parity.rs`: one body of caller code, run against both backends, yields the same transcript shape and the same text. This test is what keeps the two from drifting apart later
+- [X] T048 [P] [US2] Write `core/tests/remote_faults.rs`: host down gives a network error, a wrong credential gives a rejected-credential error, a connection dropped mid-request gives a network error with nothing presented as final, and a stalled server gives a timeout at the configured limit and not later
+- [X] T049 [P] [US2] Write `core/tests/remote_config.rs`: building a remote transcriber with no endpoint fails at construction, and no default endpoint string exists anywhere in the crate
+- [X] T050 [P] [US2] Write `core/tests/fallback.rs`: with fallback enabled a failing remote is retried locally and the transcript says so; with fallback off — the default — the remote failure surfaces untouched
 
 ### Implementation for User Story 2
 
-- [ ] T051 [US2] Write `core/src/wire.rs`: the serde types for every message in [contracts/websocket-protocol.md](./contracts/websocket-protocol.md), behind the `remote` feature
-- [ ] T052 [US2] Write `core/src/backend/remote.rs`: connect, present the bearer credential on the handshake, then send the start frame, the audio as one binary frame, and the end frame
-- [ ] T053 [US2] In `core/src/backend/remote.rs`, read the replies and turn them into a `Transcript` or the matching error, using the code table in the protocol contract
-- [ ] T054 [US2] In `core/src/backend/remote.rs`, implement cancellation as a cancel message plus a dropped socket, and keep the connect timeout distinct from the transcription timeout so an unreachable host reads differently from a slow one
-- [ ] T055 [US2] Write `core/src/fallback.rs`: hold both backends, try the remote, fall back only when the caller asked, and record which one produced the result
-- [ ] T056 [US2] In `core/src/config.rs`, make `Config::remote` reject a missing endpoint at construction and confirm the credential's `Debug` shows a placeholder
-- [ ] T057 [US2] In `core/Cargo.toml` and `core/src/lib.rs`, confirm the feature seam: with default features the crate has no async runtime and no socket code, and `cargo tree` shows neither tokio nor tungstenite
+- [X] T051 [US2] Write `core/src/wire.rs`: the serde types for every message in [contracts/websocket-protocol.md](./contracts/websocket-protocol.md), behind the `remote` feature
+- [X] T052 [US2] Write `core/src/backend/remote.rs`: connect, present the bearer credential on the handshake, then send the start frame, the audio as one binary frame, and the end frame
+- [X] T053 [US2] In `core/src/backend/remote.rs`, read the replies and turn them into a `Transcript` or the matching error, using the code table in the protocol contract
+- [X] T054 [US2] In `core/src/backend/remote.rs`, implement cancellation as a cancel message plus a dropped socket, and keep the connect timeout distinct from the transcription timeout so an unreachable host reads differently from a slow one
+- [X] T055 [US2] Write `core/src/fallback.rs`: hold both backends, try the remote, fall back only when the caller asked, and record which one produced the result
+- [X] T056 [US2] In `core/src/config.rs`, make `Config::remote` reject a missing endpoint at construction and confirm the credential's `Debug` shows a placeholder
+- [X] T057 [US2] In `core/Cargo.toml` and `core/src/lib.rs`, confirm the feature seam: with default features the crate has no async runtime and no socket code, and `cargo tree` shows neither tokio nor tungstenite
 
 **Checkpoint**: One setting switches where transcription happens. Nothing else in the caller
 changes.
@@ -156,19 +156,19 @@ final text.
 
 ### Tests for User Story 3
 
-- [ ] T058 [P] [US3] Write `core/tests/partials_local.rs`: partials arrive during decoding, in sequence order with no gaps, and concatenating them equals the final text exactly
-- [ ] T059 [P] [US3] Write `core/tests/partials_remote.rs`: the same holds through the stub server, with sequence numbers preserved end to end
-- [ ] T060 [P] [US3] Write `core/tests/partials_parity.rs`: both backends deliver partials through the same caller-facing mechanism, so a caller using them can still switch by configuration alone
-- [ ] T061 [P] [US3] Write `core/tests/partials_terminal.rs`: no partial arrives after the final result, a failure or a cancellation after partials tells the caller the transcript will not be completed, and a caller that asked for nothing receives no partial and pays no cost
-- [ ] T062 [P] [US3] Write `core/tests/partials_latency.rs`: a partial reaches the caller within 50 ms of the decoder finishing that segment, and is never held back to be batched with the next
+- [X] T058 [P] [US3] Write `core/tests/partials_local.rs`: partials arrive during decoding, in sequence order with no gaps, and concatenating them equals the final text exactly
+- [X] T059 [P] [US3] Write `core/tests/partials_remote.rs`: the same holds through the stub server, with sequence numbers preserved end to end
+- [X] T060 [P] [US3] Write `core/tests/partials_parity.rs`: both backends deliver partials through the same caller-facing mechanism, so a caller using them can still switch by configuration alone
+- [X] T061 [P] [US3] Write `core/tests/partials_terminal.rs`: no partial arrives after the final result, a failure or a cancellation after partials tells the caller the transcript will not be completed, and a caller that asked for nothing receives no partial and pays no cost
+- [X] T062 [P] [US3] Write `core/tests/partials_latency.rs`: a partial reaches the caller within 50 ms of the decoder finishing that segment, and is never held back to be batched with the next
 
 ### Implementation for User Story 3
 
-- [ ] T063 [US3] In `core/src/backend/whisper.rs`, drive partials from `set_segment_callback_safe`, emitting append-only partials with a sequence number and the segment's timing
-- [ ] T064 [US3] In `core/src/lib.rs`, plumb `transcribe_with`'s callback through, invoked on the calling thread and never after the call returns, while `transcribe` registers no callback with the decoder at all
-- [ ] T065 [US3] In `core/src/wire.rs` and `core/src/backend/remote.rs`, carry partials over the socket one message each, preserving sequence numbers so a client can detect a gap, and never batching them
-- [ ] T066 [US3] In `core/src/backend/whisper.rs` and `core/src/backend/remote.rs`, enforce the terminal rules: nothing after the final result, and a clear not-completed signal when a failure or cancellation follows partials already delivered
-- [ ] T067 [P] [US3] Add `--partials` to `core/examples/transcribe.rs`, printing text as it decodes
+- [X] T063 [US3] In `core/src/backend/whisper.rs`, drive partials from `set_segment_callback_safe`, emitting append-only partials with a sequence number and the segment's timing
+- [X] T064 [US3] In `core/src/lib.rs`, plumb `transcribe_with`'s callback through, invoked on the calling thread and never after the call returns, while `transcribe` registers no callback with the decoder at all
+- [X] T065 [US3] In `core/src/wire.rs` and `core/src/backend/remote.rs`, carry partials over the socket one message each, preserving sequence numbers so a client can detect a gap, and never batching them
+- [X] T066 [US3] In `core/src/backend/whisper.rs` and `core/src/backend/remote.rs`, enforce the terminal rules: nothing after the final result, and a clear not-completed signal when a failure or cancellation follows partials already delivered
+- [X] T067 [P] [US3] Add `--partials` to `core/examples/transcribe.rs`, printing text as it decodes
 
 **Checkpoint**: Every story so far works with and without progressive results.
 
