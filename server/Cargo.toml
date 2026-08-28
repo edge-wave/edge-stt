@@ -1,0 +1,24 @@
+[package]
+name = "edge-stt-server"
+description = "Transcription server for edge-stt clients."
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "edge-stt-server"
+path = "src/main.rs"
+
+[dependencies]
+edge-stt-core = { workspace = true, features = ["whisper", "remote"] }
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "time", "sync", "signal", "macros"] }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+log.workspace = true

@@ -33,13 +33,13 @@ A Rust workspace at the repository root, laid out as in
 **Purpose**: A workspace that builds, configured the way edge-ear is, so the two feel like one
 project.
 
-- [ ] T001 Create the workspace `Cargo.toml` at the repository root: members `core`, `capi`, `py`, `server`; `[workspace.package]` with version 0.1.0, edition 2024, rust-version 1.97, license `MIT OR Apache-2.0`, repository `https://github.com/edge-wave/edge-stt`; `[workspace.dependencies]` pinning whisper-rs 0.16, thiserror 2, log 0.4, tokio 1.53, axum 0.8, tokio-tungstenite 0.30, serde 1, serde_json 1, clap 4, uuid 1, pyo3 0.29.2
-- [ ] T002 [P] Copy edge-ear's toolchain settings verbatim into `rust-toolchain.toml` (channel 1.97.1, components rustfmt and clippy), `clippy.toml` (`msrv = "1.97"`), and `rustfmt.toml` (edition 2024, max_width 100, Unix newlines)
-- [ ] T003 [P] Add `LICENSE-MIT` and `LICENSE-APACHE` at the repository root, matching edge-ear's dual licence
-- [ ] T004 [P] Write `THIRD-PARTY-LICENSES` with a Whisper section recording that no weights are shipped, and what a contributor must write down — licence, checksum, origin — before referencing one
-- [ ] T005 [P] Write `CONTRIBUTING.md` adapted from edge-ear's: say the thing rather than its number, **comments few and at most two lines**, **commit messages at most ten lines**, nothing added to assets without provenance, and the three commands that must pass before a pull request
-- [ ] T006 [P] Write a `README.md` skeleton saying what edge-stt does and does not do, that it is edge-ear's sibling, and that unlike edge-ear it needs a C++ toolchain and CMake because whisper.cpp is C++
-- [ ] T007 [P] Add `.gitignore` covering `target/` and a local `models/` directory, so model weights cannot be committed by accident
+- [X] T001 Create the workspace `Cargo.toml` at the repository root: members `core`, `capi`, `py`, `server`; `[workspace.package]` with version 0.1.0, edition 2024, rust-version 1.97, license `MIT OR Apache-2.0`, repository `https://github.com/edge-wave/edge-stt`; `[workspace.dependencies]` pinning whisper-rs 0.16, thiserror 2, log 0.4, tokio 1.53, axum 0.8, tokio-tungstenite 0.30, serde 1, serde_json 1, clap 4, uuid 1, pyo3 0.29.2
+- [X] T002 [P] Copy edge-ear's toolchain settings verbatim into `rust-toolchain.toml` (channel 1.97.1, components rustfmt and clippy), `clippy.toml` (`msrv = "1.97"`), and `rustfmt.toml` (edition 2024, max_width 100, Unix newlines)
+- [X] T003 [P] Add `LICENSE-MIT` and `LICENSE-APACHE` at the repository root, matching edge-ear's dual licence
+- [X] T004 [P] Write `THIRD-PARTY-LICENSES` with a Whisper section recording that no weights are shipped, and what a contributor must write down — licence, checksum, origin — before referencing one
+- [X] T005 [P] Write `CONTRIBUTING.md` adapted from edge-ear's: say the thing rather than its number, **comments few and at most two lines**, **commit messages at most ten lines**, nothing added to assets without provenance, and the three commands that must pass before a pull request
+- [X] T006 [P] Write a `README.md` skeleton saying what edge-stt does and does not do, that it is edge-ear's sibling, and that unlike edge-ear it needs a C++ toolchain and CMake because whisper.cpp is C++
+- [X] T007 [P] Add `.gitignore` covering `target/` and a local `models/` directory, so model weights cannot be committed by accident
 
 ---
 
@@ -51,22 +51,22 @@ the backends only have to fill it in.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T008 Create `core/Cargo.toml`: package `edge-stt-core`, features `whisper` (default) and `remote` (off), with whisper-rs behind the first and tokio plus tokio-tungstenite behind the second, both optional
-- [ ] T009 [P] Create `capi/Cargo.toml` (package `edge-stt-capi`, `crate-type = ["rlib", "cdylib", "staticlib"]`, `publish = false`) and `capi/cbindgen.toml`, both modelled on edge-ear's
-- [ ] T010 [P] Create `py/Cargo.toml` (package `edge-stt-py`, lib name `edge_stt`, pyo3 with `extension-module` and `abi3-py39`), `py/pyproject.toml` for maturin, and `py/build.rs`
-- [ ] T011 [P] Create `server/Cargo.toml`: package `edge-stt-server`, a binary, depending on `edge-stt-core` with the `whisper` feature plus axum, tokio, clap, and uuid
-- [ ] T012 [P] Write `core/src/error.rs`: the `Error` enum with one variant per cause named in [data-model.md](./data-model.md#error), each carrying its detail, plus `pub type Result<T>` — the same pairing edge-ear uses
-- [ ] T013 [P] Write `core/src/config.rs` part one: `SampleType`, `AudioFormat` with `mono_16k()`, and validation that rejects any other shape while naming both the expected and the received one
-- [ ] T014 Extend `core/src/config.rs`: `Accelerator`, `ModelSpec` (path, size hint, threads, accelerator), `RemoteConfig` (endpoint with no default, redacting credential, connect timeout), `BackendChoice`, `BackendKind`, and `Config` with `local()` and `remote()` constructors
-- [ ] T015 [P] Write `core/src/utterance.rs`: `Utterance`, `mono_16k()`, derived duration, audio under 0.3 s accepted as silence, audio over the configured maximum rejected while naming the limit and the actual length
-- [ ] T016 [P] Write `core/src/transcript.rs`: `Transcript`, `Segment`, `Partial`, and `PartialKind`, with the rule that `text` is exactly the concatenation of `segments`
-- [ ] T017 [P] Write `core/src/cancel.rs`: `CancelToken`, cloneable, with idempotent `cancel()` and `is_cancelled()`
-- [ ] T018 Write `core/src/backend/mod.rs`: the `Backend` trait as defined in [data-model.md](./data-model.md#backend), which is what makes the two paths substitutable
-- [ ] T019 Write `core/src/lib.rs`: module wiring, public re-exports, and the `EdgeStt` type with `new(Config)`, `backend_kind()`, `transcribe()`, and `transcribe_with()` — dispatching to a backend that does not exist yet
-- [ ] T020 [P] Write `core/tests/audio_format.rs`: `mono_16k()` is what edge-ear produces, and every other shape is rejected with both shapes named in the message
-- [ ] T021 [P] Write `core/tests/utterance_limits.rs`: a 0.1-second utterance is accepted, a 10-minute one is rejected against the stated limit, and neither is silently truncated
-- [ ] T022 [P] Write `core/tests/error_surface.rs`: every variant is distinct, a network failure never compares equal to a rejected credential, no variant carries transcribed text, and a credential prints as a placeholder in `Debug`
-- [ ] T023 Confirm `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`, and `cargo test --workspace` all pass on the skeleton
+- [X] T008 Create `core/Cargo.toml`: package `edge-stt-core`, features `whisper` (default) and `remote` (off), with whisper-rs behind the first and tokio plus tokio-tungstenite behind the second, both optional
+- [X] T009 [P] Create `capi/Cargo.toml` (package `edge-stt-capi`, `crate-type = ["rlib", "cdylib", "staticlib"]`, `publish = false`) and `capi/cbindgen.toml`, both modelled on edge-ear's
+- [X] T010 [P] Create `py/Cargo.toml` (package `edge-stt-py`, lib name `edge_stt`, pyo3 with `extension-module` and `abi3-py39`), `py/pyproject.toml` for maturin, and `py/build.rs`
+- [X] T011 [P] Create `server/Cargo.toml`: package `edge-stt-server`, a binary, depending on `edge-stt-core` with the `whisper` feature plus axum, tokio, clap, and uuid
+- [X] T012 [P] Write `core/src/error.rs`: the `Error` enum with one variant per cause named in [data-model.md](./data-model.md#error), each carrying its detail, plus `pub type Result<T>` — the same pairing edge-ear uses
+- [X] T013 [P] Write `core/src/config.rs` part one: `SampleType`, `AudioFormat` with `mono_16k()`, and validation that rejects any other shape while naming both the expected and the received one
+- [X] T014 Extend `core/src/config.rs`: `Accelerator`, `ModelSpec` (path, size hint, threads, accelerator), `RemoteConfig` (endpoint with no default, redacting credential, connect timeout), `BackendChoice`, `BackendKind`, and `Config` with `local()` and `remote()` constructors
+- [X] T015 [P] Write `core/src/utterance.rs`: `Utterance`, `mono_16k()`, derived duration, audio under 0.3 s accepted as silence, audio over the configured maximum rejected while naming the limit and the actual length
+- [X] T016 [P] Write `core/src/transcript.rs`: `Transcript`, `Segment`, `Partial`, and `PartialKind`, with the rule that `text` is exactly the concatenation of `segments`
+- [X] T017 [P] Write `core/src/cancel.rs`: `CancelToken`, cloneable, with idempotent `cancel()` and `is_cancelled()`
+- [X] T018 Write `core/src/backend/mod.rs`: the `Backend` trait as defined in [data-model.md](./data-model.md#backend), which is what makes the two paths substitutable
+- [X] T019 Write `core/src/lib.rs`: module wiring, public re-exports, and the `EdgeStt` type with `new(Config)`, `backend_kind()`, `transcribe()`, and `transcribe_with()` — dispatching to a backend that does not exist yet
+- [X] T020 [P] Write `core/tests/audio_format.rs`: `mono_16k()` is what edge-ear produces, and every other shape is rejected with both shapes named in the message
+- [X] T021 [P] Write `core/tests/utterance_limits.rs`: a 0.1-second utterance is accepted, a 10-minute one is rejected against the stated limit, and neither is silently truncated
+- [X] T022 [P] Write `core/tests/error_surface.rs`: every variant is distinct, a network failure never compares equal to a rejected credential, no variant carries transcribed text, and a credential prints as a placeholder in `Debug`
+- [X] T023 Confirm `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`, and `cargo test --workspace` all pass on the skeleton
 
 **Checkpoint**: The API exists and compiles. Backends can now be filled in independently.
 
@@ -84,28 +84,28 @@ known transcripts, silence produces an empty transcript, and nothing reaches for
 > Write these first and watch them fail. Every one needing a real model file is `#[ignore]`d and
 > finds it through `EDGE_STT_MODEL_DIR`, mirroring edge-ear's `EDGE_EAR_WAKE_DIR`.
 
-- [ ] T024 [P] [US1] Write `core/tests/minimal_usage.rs`: the three-line example from [contracts/rust-core-api.md](./contracts/rust-core-api.md) compiles and transcribes a known recording
-- [ ] T025 [P] [US1] Write `core/tests/silence.rs`: silence, background noise, and a 0.2-second clip each return an empty transcript with a real audio duration — never an error, never invented words
-- [ ] T026 [P] [US1] Write `core/tests/wrong_shape.rs`: 44.1 kHz, stereo, and float input are each rejected naming both shapes; an over-long utterance is rejected up front
-- [ ] T027 [P] [US1] Write `core/tests/model_errors.rs`: a missing path fails at construction with the path it searched, a corrupt file fails as unusable, and neither fails later on the first utterance
-- [ ] T028 [P] [US1] Write `core/tests/model_parameters.rs`: load a model and pin its real parameters — multilingual or not, vocabulary size, expected sample rate — so a swapped model fails loudly, the habit edge-ear's CONTRIBUTING requires
-- [ ] T029 [P] [US1] Write `core/tests/cancellation.rs`: a token fired from another thread stops decoding within roughly one segment and yields the cancelled error; cancelling before the start yields it immediately
-- [ ] T030 [P] [US1] Write `core/tests/timeout.rs`: a limit shorter than the work produces the timeout error, distinct from cancellation, and never returns later than the limit
-- [ ] T031 [P] [US1] Write `core/tests/no_network.rs`: with default features, the process opens no socket while transcribing — asserted by watching the process, not by reading the source
-- [ ] T032 [P] [US1] Write `core/tests/readme.rs`: every code block in `README.md` still compiles and does what the prose around it claims, as edge-ear does
+- [X] T024 [P] [US1] Write `core/tests/minimal_usage.rs`: the three-line example from [contracts/rust-core-api.md](./contracts/rust-core-api.md) compiles and transcribes a known recording
+- [X] T025 [P] [US1] Write `core/tests/silence.rs`: silence, background noise, and a 0.2-second clip each return an empty transcript with a real audio duration — never an error, never invented words
+- [X] T026 [P] [US1] Write `core/tests/wrong_shape.rs`: 44.1 kHz, stereo, and float input are each rejected naming both shapes; an over-long utterance is rejected up front
+- [X] T027 [P] [US1] Write `core/tests/model_errors.rs`: a missing path fails at construction with the path it searched, a corrupt file fails as unusable, and neither fails later on the first utterance
+- [X] T028 [P] [US1] Write `core/tests/model_parameters.rs`: load a model and pin its real parameters — multilingual or not, vocabulary size, expected sample rate — so a swapped model fails loudly, the habit edge-ear's CONTRIBUTING requires
+- [X] T029 [P] [US1] Write `core/tests/cancellation.rs`: a token fired from another thread stops decoding within roughly one segment and yields the cancelled error; cancelling before the start yields it immediately
+- [X] T030 [P] [US1] Write `core/tests/timeout.rs`: a limit shorter than the work produces the timeout error, distinct from cancellation, and never returns later than the limit
+- [X] T031 [P] [US1] Write `core/tests/no_network.rs`: with default features, the process opens no socket while transcribing — asserted by watching the process, not by reading the source
+- [X] T032 [P] [US1] Write `core/tests/readme.rs`: every code block in `README.md` still compiles and does what the prose around it claims, as edge-ear does
 
 ### Implementation for User Story 1
 
-- [ ] T033 [US1] Write `core/src/backend/whisper.rs`: load the model in the constructor, verify its real parameters, and refuse a monolingual model when a multilingual one is needed
-- [ ] T034 [US1] In `core/src/backend/whisper.rs`, build `FullParams` from `Config`: language forced with `set_language` or detected with `set_detect_language`, thread count from `ModelSpec`, then run the decode
-- [ ] T035 [US1] In `core/src/backend/whisper.rs`, assemble the `Transcript`: joined text, timed segments, settled language, confidence, audio duration, decoding time, and the backend that produced it
-- [ ] T036 [US1] In `core/src/backend/whisper.rs`, use `set_no_speech_thold` so silence comes back as an empty transcript rather than as noise or an error
-- [ ] T037 [US1] In `core/src/backend/whisper.rs`, drive `set_abort_callback_safe` from the `CancelToken` and from the deadline, returning cancellation and timeout as separate errors
-- [ ] T038 [US1] In `core/src/backend/whisper.rs`, map load and decode failures onto the error variants — missing, unusable, and out of resources — with the model size and the shortfall named
-- [ ] T039 [US1] In `core/src/lib.rs`, wire `EdgeStt::new` to build the local backend, and make an accelerator the build does not support an error at construction rather than a silent fall back to the CPU
-- [ ] T040 [P] [US1] Write `core/examples/probe_model.rs`, printing a model's real inputs and outputs — the same tool edge-ear tells contributors to run before trusting a model
-- [ ] T041 [P] [US1] Write `core/examples/transcribe.rs`: read a wav, print the text, the model, the audio duration, and the decoding time
-- [ ] T042 [US1] Add `--bench` to `core/examples/transcribe.rs`, reporting the three figures an integrator chooses a model size with: decoding time against audio duration, time to first partial, and peak memory
+- [X] T033 [US1] Write `core/src/backend/whisper.rs`: load the model in the constructor, verify its real parameters, and refuse a monolingual model when a multilingual one is needed
+- [X] T034 [US1] In `core/src/backend/whisper.rs`, build `FullParams` from `Config`: language forced with `set_language` or detected with `set_detect_language`, thread count from `ModelSpec`, then run the decode
+- [X] T035 [US1] In `core/src/backend/whisper.rs`, assemble the `Transcript`: joined text, timed segments, settled language, confidence, audio duration, decoding time, and the backend that produced it
+- [X] T036 [US1] In `core/src/backend/whisper.rs`, use `set_no_speech_thold` so silence comes back as an empty transcript rather than as noise or an error
+- [X] T037 [US1] In `core/src/backend/whisper.rs`, drive `set_abort_callback_safe` from the `CancelToken` and from the deadline, returning cancellation and timeout as separate errors
+- [X] T038 [US1] In `core/src/backend/whisper.rs`, map load and decode failures onto the error variants — missing, unusable, and out of resources — with the model size and the shortfall named
+- [X] T039 [US1] In `core/src/lib.rs`, wire `EdgeStt::new` to build the local backend, and make an accelerator the build does not support an error at construction rather than a silent fall back to the CPU
+- [X] T040 [P] [US1] Write `core/examples/probe_model.rs`, printing a model's real inputs and outputs — the same tool edge-ear tells contributors to run before trusting a model
+- [X] T041 [P] [US1] Write `core/examples/transcribe.rs`: read a wav, print the text, the model, the audio duration, and the decoding time
+- [X] T042 [US1] Add `--bench` to `core/examples/transcribe.rs`, reporting the three figures an integrator chooses a model size with: decoding time against audio duration, time to first partial, and peak memory
 - [ ] T043 [US1] Write `core/tests/overhead.rs`: transcription takes no more than 10% longer than the same model through whisper.cpp's own tooling on the same machine and audio — the one speed claim this project makes about itself
 - [ ] T044 [US1] Run `--bench` on both reference machines for every supported model size in Korean and English, and record the raw figures in `docs/measurements.md`. The plan schedules this early on purpose: nothing downstream may quote a latency number that did not come out of it
 
