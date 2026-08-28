@@ -1,0 +1,21 @@
+[package]
+name = "edge-stt-py"
+description = "Python binding for edge-stt"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "edge_stt"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+edge-stt-core.workspace = true
+pyo3 = { workspace = true, features = ["extension-module", "abi3-py39"] }
+
+[build-dependencies]
+pyo3-build-config.workspace = true
