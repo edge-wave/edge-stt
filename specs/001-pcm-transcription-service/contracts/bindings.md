@@ -21,7 +21,7 @@ the last failure.
 edge_stt_h *stt = edge_stt_new();
 if (!stt) { fprintf(stderr, "%s\n", edge_stt_last_error()); return 1; }
 
-if (edge_stt_load_model(stt, "models/ggml-base-q5_0.bin") != 0) {
+if (edge_stt_load_model(stt, "models/ggml-base-q5_1.bin") != 0) {
     fprintf(stderr, "%s\n", edge_stt_last_error());
     edge_stt_free(stt);
     return 1;
@@ -64,7 +64,7 @@ edge_stt_free(stt);
 ```python
 from edge_stt import EdgeStt
 
-with EdgeStt(model="models/ggml-base-q5_0.bin") as t:
+with EdgeStt(model="models/ggml-base-q5_1.bin") as t:
     result = t.transcribe(samples, sample_rate=16000)
     print(result.text)
 
@@ -82,5 +82,7 @@ with EdgeStt(model="models/ggml-base-q5_0.bin") as t:
 - Each error variant maps to its own exception class under a common `EdgeSttError` base, so
   `except NetworkError` is possible without inspecting a message string.
 - The GIL is released around decoding, so a Python program can do something else meanwhile.
-- `samples` accepts anything supporting the buffer protocol — `bytes`, `bytearray`, and a numpy
-  `int16` array — without a copy where the layout already matches.
+- `samples` accepts `bytes`, a sequence of ints, or anything with `tobytes()` — a numpy `int16`
+  array among them. There is no zero-copy path: the wheel is built against the limited API for
+  one binary across Python versions, and the limited API has no buffer protocol. Paying one copy
+  per utterance is the price of that, and it is small beside decoding.

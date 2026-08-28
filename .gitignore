@@ -2,3 +2,4 @@
 /models
 *.rs.bk
 .DS_Store
+/capi/docs

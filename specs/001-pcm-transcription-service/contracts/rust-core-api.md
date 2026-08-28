@@ -12,7 +12,7 @@ time. A caller who has used edge-ear should not have to learn a second idiom.
 use edge_stt_core::{EdgeStt, Config, ModelSpec, Utterance};
 
 let stt = EdgeStt::new(
-    Config::local(ModelSpec::at("models/ggml-base-q5_0.bin"))
+    Config::local(ModelSpec::at("models/ggml-base-q5_1.bin"))
 )?;
 
 let transcript = stt.transcribe(&Utterance::mono_16k(&samples))?;

@@ -20,7 +20,8 @@ repository.
 
 | File | Origin | SHA-256 |
 |------|--------|---------|
-| _(fill in when a specific file is referenced)_ | | |
+| `ggml-tiny-q5_1.bin` | whisper.cpp model repository on Hugging Face | `818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7` |
+| `ggml-base-q5_1.bin` | whisper.cpp model repository on Hugging Face | `422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898` |
 
 ## Rust dependencies
 

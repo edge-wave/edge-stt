@@ -183,25 +183,25 @@ gets its own correct transcript with partials while a disconnecting client distu
 
 ### Tests for User Story 4
 
-- [ ] T068 [P] [US4] Write `server/tests/transcribe_roundtrip.rs`: a client gets the same transcript shape the on-device backend produces, partials included
-- [ ] T069 [P] [US4] Write `server/tests/concurrent_clients.rs`: eight clients at once each receive their own correct transcript, with no transcript reaching the wrong client
-- [ ] T070 [P] [US4] Write `server/tests/rejects_bad_credential.rs`: a missing or wrong credential is refused at the handshake, nothing is transcribed, and the refusal is distinguishable from a server error
-- [ ] T071 [P] [US4] Write `server/tests/at_capacity.rs`: past capacity a client is told its queue position or refused explicitly, and is never left without an answer
-- [ ] T072 [P] [US4] Write `server/tests/client_vanishes.rs`: a client disappearing mid-utterance stops that decoding and frees what it held, without affecting the others
-- [ ] T073 [P] [US4] Write `server/tests/health.rs`: alive answers immediately, ready answers only once the model has loaded
-- [ ] T074 [P] [US4] Write `server/tests/no_retention.rs`: after a request completes no audio or transcript remains on disk or in memory, and no transcribed text appears in the logs unless it was turned on
+- [X] T068 [P] [US4] Write `server/tests/transcribe_roundtrip.rs`: a client gets the same transcript shape the on-device backend produces, partials included
+- [X] T069 [P] [US4] Write `server/tests/concurrent_clients.rs`: eight clients at once each receive their own correct transcript, with no transcript reaching the wrong client
+- [X] T070 [P] [US4] Write `server/tests/rejects_bad_credential.rs`: a missing or wrong credential is refused at the handshake, nothing is transcribed, and the refusal is distinguishable from a server error
+- [X] T071 [P] [US4] Write `server/tests/at_capacity.rs`: past capacity a client is told its queue position or refused explicitly, and is never left without an answer
+- [X] T072 [P] [US4] Write `server/tests/client_vanishes.rs`: a client disappearing mid-utterance stops that decoding and frees what it held, without affecting the others
+- [X] T073 [P] [US4] Write `server/tests/health.rs`: alive answers immediately, ready answers only once the model has loaded
+- [X] T074 [P] [US4] Write `server/tests/no_retention.rs`: after a request completes no audio or transcript remains on disk or in memory, and no transcribed text appears in the logs unless it was turned on
 
 ### Implementation for User Story 4
 
-- [ ] T075 [US4] Write `server/src/main.rs`: clap arguments for model path, bind address, credential file, capacity, and the explicit flag that opens transcription to unauthenticated callers — refusing to start without one or the other
-- [ ] T076 [P] [US4] Write `server/src/auth.rs`: check the bearer credential on the handshake, before any audio is read
-- [ ] T077 [P] [US4] Write `server/src/health.rs`: the alive route, and the ready route that stays unready until the model has finished loading, so a supervisor does not kill a server that is working
-- [ ] T078 [US4] Write `server/src/session.rs`: one client's request — its identifier, its state machine as drawn in [data-model.md](./data-model.md#transcriptionsession-server-only), its cancellation token, and its partial counter
-- [ ] T079 [US4] Write `server/src/capacity.rs`: a bounded queue that reports position on acceptance and refuses explicitly when full
-- [ ] T080 [US4] Write `server/src/ws.rs`: the WebSocket route handling start, audio, end, and cancel, and emitting accepted, partial, final, error, and cancelled exactly as the protocol contract specifies
-- [ ] T081 [US4] In `server/src/ws.rs`, bridge to the blocking core with `spawn_blocking`, sharing one loaded `EdgeStt` across sessions
-- [ ] T082 [US4] In `server/src/ws.rs`, map every core error onto its protocol code, keeping a dead host, a bad credential, and a full server distinguishable, and keeping transcribed text out of every message
-- [ ] T083 [US4] In `server/src/ws.rs` and `server/src/session.rs`, drop everything a request held when it ends, and validate audio shape with the same core code rather than a second implementation
+- [X] T075 [US4] Write `server/src/main.rs`: clap arguments for model path, bind address, credential file, capacity, and the explicit flag that opens transcription to unauthenticated callers — refusing to start without one or the other
+- [X] T076 [P] [US4] Write `server/src/auth.rs`: check the bearer credential on the handshake, before any audio is read
+- [X] T077 [P] [US4] Write `server/src/health.rs`: the alive route, and the ready route that stays unready until the model has finished loading, so a supervisor does not kill a server that is working
+- [X] T078 [US4] Write `server/src/session.rs`: one client's request — its identifier, its state machine as drawn in [data-model.md](./data-model.md#transcriptionsession-server-only), its cancellation token, and its partial counter
+- [X] T079 [US4] Write `server/src/capacity.rs`: a bounded queue that reports position on acceptance and refuses explicitly when full
+- [X] T080 [US4] Write `server/src/ws.rs`: the WebSocket route handling start, audio, end, and cancel, and emitting accepted, partial, final, error, and cancelled exactly as the protocol contract specifies
+- [X] T081 [US4] In `server/src/ws.rs`, bridge to the blocking core with `spawn_blocking`, sharing one loaded `EdgeStt` across sessions
+- [X] T082 [US4] In `server/src/ws.rs`, map every core error onto its protocol code, keeping a dead host, a bad credential, and a full server distinguishable, and keeping transcribed text out of every message
+- [X] T083 [US4] In `server/src/ws.rs` and `server/src/session.rs`, drop everything a request held when it ends, and validate audio shape with the same core code rather than a second implementation
 
 **Checkpoint**: All four stories work. The remote backend now has a real server to talk to.
 
@@ -215,30 +215,30 @@ They come after the stories rather than inside them because they add no behaviou
 building them per story would mean rewriting the same two files four times. Pull this phase
 earlier if a C or Python integrator is waiting on the MVP.
 
-- [ ] T084 [P] Write `capi/src/error.rs`: zero for success and a distinct **negative** code per error variant, with a thread-local `edge_stt_last_error()` — edge-ear's convention exactly, not a new one
-- [ ] T085 [P] Write `capi/src/convert.rs`: transcripts and segments across the boundary, with strings owned by the object they came from
-- [ ] T086 Write `capi/src/lib.rs`: `edge_stt_new`, `edge_stt_free`, `edge_stt_load_model`, `edge_stt_transcribe`, `edge_stt_cancel`, and the transcript accessors — no name repeating the prefix — each catching unwinding so no panic crosses into C, and each carrying `@brief`, `@param`, `@return`, and `@see` in its doc comment so cbindgen writes a documented header
-- [ ] T087 Write `capi/src/partials.rs`: `edge_stt_on_partial` with user data, called on the transcribing thread and never after the call returns, mirroring `edge_ear_on_event`
-- [ ] T088 Write `capi/cbindgen.toml` in edge-ear's form — `documentation_style = "doxy"`, an include guard, and a header block stating the error and memory rules — generate `capi/include/edge_stt.h` from it, and write `capi/tests/header_is_current.rs`, which regenerates and fails when the committed header has drifted
-- [ ] T089 [P] Write `capi/tests/surface.c` and `capi/tests/c_surface.rs`: the C surface compiles, links, transcribes, and frees without leaking
-- [ ] T090 [P] Write `capi/examples/transcribe.c`, the C twin of the Rust example
-- [ ] T091 Write `py/src/lib.rs`: `EdgeStt`, `Transcript`, one exception class per error variant under a common base, the GIL released around decoding, and samples accepted from any buffer without a copy where the layout matches
-- [ ] T092 In `py/src/lib.rs`, add `transcribe_stream` as a generator yielding partials, with the final transcript available once it is exhausted
-- [ ] T093 [P] Write `py/tests/test_transcribe.py`: the documented Python examples run, exceptions are catchable by class, and a numpy `int16` array is accepted directly
+- [X] T084 [P] Write `capi/src/error.rs`: zero for success and a distinct **negative** code per error variant, with a thread-local `edge_stt_last_error()` — edge-ear's convention exactly, not a new one
+- [X] T085 [P] Write `capi/src/convert.rs`: transcripts and segments across the boundary, with strings owned by the object they came from
+- [X] T086 Write `capi/src/lib.rs`: `edge_stt_new`, `edge_stt_free`, `edge_stt_load_model`, `edge_stt_transcribe`, `edge_stt_cancel`, and the transcript accessors — no name repeating the prefix — each catching unwinding so no panic crosses into C, and each carrying `@brief`, `@param`, `@return`, and `@see` in its doc comment so cbindgen writes a documented header
+- [X] T087 Write `capi/src/partials.rs`: `edge_stt_on_partial` with user data, called on the transcribing thread and never after the call returns, mirroring `edge_ear_on_event`
+- [X] T088 Write `capi/cbindgen.toml` in edge-ear's form — `documentation_style = "doxy"`, an include guard, and a header block stating the error and memory rules — generate `capi/include/edge_stt.h` from it, and write `capi/tests/header_is_current.rs`, which regenerates and fails when the committed header has drifted
+- [X] T089 [P] Write `capi/tests/surface.c` and `capi/tests/c_surface.rs`: the C surface compiles, links, transcribes, and frees without leaking
+- [X] T090 [P] Write `capi/examples/transcribe.c`, the C twin of the Rust example
+- [X] T091 Write `py/src/lib.rs`: `EdgeStt`, `Transcript`, one exception class per error variant under a common base, the GIL released around decoding, and samples accepted from any buffer without a copy where the layout matches
+- [X] T092 In `py/src/lib.rs`, add `transcribe_stream` as a generator yielding partials, with the final transcript available once it is exhausted
+- [X] T093 [P] Write `py/tests/test_transcribe.py`: the documented Python examples run, exceptions are catchable by class, and a numpy `int16` array is accepted directly
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T094 [P] Finish `README.md`: what it does, what it does not do, the model table, the C++ toolchain requirement, and the Rust, C, and Python examples the `readme.rs` test checks
-- [ ] T095 [P] Publish `docs/measurements.md`: the full table from both reference machines, every model size, Korean and English — the measurements an integrator picks a size from, stated as figures rather than as a promise
-- [ ] T096 [P] Fill in `THIRD-PARTY-LICENSES` for every model referenced in the documentation, with licence, checksum, and where it came from
-- [ ] T097 Write `core/tests/soak.rs`: a thousand consecutive utterances each produce a transcript or a typed failure, none are lost, and memory at the end is within 5% of memory after the first hundred
-- [ ] T098 Write `.github/workflows/ci.yml`: clippy with warnings denied, a formatting check, and the full suite, on Linux and macOS
-- [ ] T099 Add a job to `.github/workflows/ci.yml` running the offline suite inside a network namespace with no interfaces, so the no-network claim is verified by the machine on every change rather than by a reviewer
-- [ ] T100 [P] Write `capi/Doxyfile` in edge-ear's form — reading only `capi/include`, output to `capi/docs`, C-optimised, undocumented symbols warned about rather than extracted — and check the generated documentation renders
-- [ ] T101 Walk `specs/001-pcm-transcription-service/quickstart.md` top to bottom on a clean machine and fix whatever has drifted
-- [ ] T102 Sweep the tree for planning-document numbering: no `FR-`, `SC-`, `US`, or task identifier may appear in any source file, comment, or commit message. edge-ear's CONTRIBUTING asks for the sentence instead, and the traceability lives in these documents
+- [X] T094 [P] Finish `README.md`: what it does, what it does not do, the model table, the C++ toolchain requirement, and the Rust, C, and Python examples the `readme.rs` test checks
+- [X] T095 [P] Publish `docs/measurements.md`: the full table from both reference machines, every model size, Korean and English — the measurements an integrator picks a size from, stated as figures rather than as a promise
+- [X] T096 [P] Fill in `THIRD-PARTY-LICENSES` for every model referenced in the documentation, with licence, checksum, and where it came from
+- [X] T097 Write `core/tests/soak.rs`: a thousand consecutive utterances each produce a transcript or a typed failure, none are lost, and memory at the end is within 5% of memory after the first hundred
+- [X] T098 Write `.github/workflows/ci.yml`: clippy with warnings denied, a formatting check, and the full suite, on Linux and macOS
+- [X] T099 Add a job to `.github/workflows/ci.yml` running the offline suite inside a network namespace with no interfaces, so the no-network claim is verified by the machine on every change rather than by a reviewer
+- [X] T100 [P] Write `capi/Doxyfile` in edge-ear's form — reading only `capi/include`, output to `capi/docs`, C-optimised, undocumented symbols warned about rather than extracted — and check the generated documentation renders
+- [X] T101 Walk `specs/001-pcm-transcription-service/quickstart.md` top to bottom on a clean machine and fix whatever has drifted
+- [X] T102 Sweep the tree for planning-document numbering: no `FR-`, `SC-`, `US`, or task identifier may appear in any source file, comment, or commit message. edge-ear's CONTRIBUTING asks for the sentence instead, and the traceability lives in these documents
 
 ---
 

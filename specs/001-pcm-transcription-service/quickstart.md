@@ -29,8 +29,8 @@ word. Fetch one and point the tests at it:
 
 ```bash
 mkdir -p ~/models/whisper
-curl -L -o ~/models/whisper/ggml-base-q5_0.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_0.bin
+curl -L -o ~/models/whisper/ggml-base-q5_1.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin
 
 export EDGE_STT_MODEL_DIR=~/models/whisper
 ```
@@ -59,7 +59,7 @@ cargo test --workspace -- --ignored
 ## First transcript
 
 ```bash
-cargo run --example transcribe -- ~/models/whisper/ggml-base-q5_0.bin sample.wav
+cargo run --example transcribe -- ~/models/whisper/ggml-base-q5_1.bin sample.wav
 ```
 
 Expected: the spoken words on stdout, followed by the model, the audio duration, and the
@@ -69,7 +69,7 @@ Before trusting a model you have not used here before, print what it really is �
 edge-ear's CONTRIBUTING insists on:
 
 ```bash
-cargo run --example probe_model -- ~/models/whisper/ggml-base-q5_0.bin
+cargo run --example probe_model -- ~/models/whisper/ggml-base-q5_1.bin
 ```
 
 Expected: multilingual or not, vocabulary size, and expected sample rate. If these disagree with
@@ -124,7 +124,7 @@ dropped mid-request yields `Network` and no partial presented as final; a stalle
 ### Story 3 — partial transcripts
 
 ```bash
-cargo test --workspace --all-features -- --ignored partials
+cargo test --workspace --features full -- --ignored partials
 ```
 
 Expected, on both backends: the first partial arrives well before the final result; every
@@ -134,7 +134,7 @@ nothing arrives after the final result.
 By eye:
 
 ```bash
-cargo run --example transcribe -- --partials ~/models/whisper/ggml-small-q5_0.bin long.wav
+cargo run --example transcribe -- --partials ~/models/whisper/ggml-small-q5_1.bin long.wav
 ```
 
 Expected: text appearing in pieces as it decodes, not all at the end.
@@ -143,7 +143,7 @@ Expected: text appearing in pieces as it decodes, not all at the end.
 
 ```bash
 cargo run -p edge-stt-server -- \
-  --model ~/models/whisper/ggml-small-q5_0.bin \
+  --model ~/models/whisper/ggml-small-q5_1.bin \
   --bind 0.0.0.0:8000 \
   --credential-file ~/.config/edge-stt/token
 ```
@@ -160,7 +160,7 @@ Point a client at it by configuration alone — no code change from the Story 1 
 ```bash
 EDGE_STT_ENDPOINT=ws://localhost:8000/api/v1/transcribe \
 EDGE_STT_TOKEN=$(cat ~/.config/edge-stt/token) \
-cargo run --example transcribe --features remote -- sample.wav
+cargo run --example transcribe --features remote -- MODEL sample.wav
 ```
 
 Expected: the same transcript as Story 1 produced locally, with `backend` reported as remote.
@@ -206,7 +206,7 @@ At runtime, the same information comes back with every transcript, in `processin
 
 ```bash
 cd py && maturin develop
-python -c "from edge_stt import EdgeStt; print(EdgeStt(model='$EDGE_STT_MODEL_DIR/ggml-base-q5_0.bin'))"
+python -c "from edge_stt import EdgeStt; print(EdgeStt(model='$EDGE_STT_MODEL_DIR/ggml-base-q5_1.bin'))"
 pytest
 ```
 
@@ -215,7 +215,7 @@ pytest
 ```bash
 cargo build -p edge-stt-capi
 cc capi/examples/transcribe.c -Icapi/include -Ltarget/debug -ledge_stt_capi -o /tmp/transcribe
-/tmp/transcribe ~/models/whisper/ggml-base-q5_0.bin sample.wav
+/tmp/transcribe ~/models/whisper/ggml-base-q5_1.bin sample.wav
 ```
 
 Expected: the same transcript the Rust example printed. If the header is stale, `cargo test -p

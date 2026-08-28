@@ -1,0 +1,42 @@
+language = "C"
+style = "type"
+include_guard = "EDGE_STT_H"
+cpp_compat = true
+tab_width = 4
+documentation_style = "doxy"
+sys_includes = ["stddef.h", "stdint.h"]
+no_includes = true
+
+header = """
+/**
+ * @file
+ * @brief edge-stt: turn a recording into text.
+ *
+ * Generated from the Rust source by cbindgen; do not
+ * edit. Regenerate with:
+ *     cbindgen --config capi/cbindgen.toml --crate edge-stt-capi \\
+ *         --output capi/include/edge_stt.h
+ *
+ * Errors: every fallible call returns int. 0 is success, negative names
+ * the failure, and edge_stt_last_error() describes the most recent one
+ * on this thread.
+ *
+ * Memory: the caller owns the samples it passes in. Anything the
+ * library hands back through an out-parameter is freed with its own
+ * _free. Strings belong to the object they came from and die with it.
+ *
+ * Audio: 16000 Hz, one channel, 16-bit signed. Nothing else is taken,
+ * and nothing is converted on your behalf.
+ *
+ * Threads: a handle is usable from several threads, and cancelling
+ * from another thread is the point of edge_stt_cancel. edge_stt_free
+ * must not run alongside another call on the same handle.
+ */
+"""
+
+[export]
+prefix = ""
+include = ["edge_stt_error"]
+
+[enum]
+prefix_with_name = false
