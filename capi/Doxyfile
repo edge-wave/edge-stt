@@ -1,0 +1,12 @@
+PROJECT_NAME           = "edge-stt"
+PROJECT_BRIEF          = "Turn a recording into text"
+INPUT                  = capi/include
+OUTPUT_DIRECTORY       = capi/docs
+GENERATE_LATEX         = NO
+GENERATE_HTML          = YES
+QUIET                  = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TYPEDEF_HIDES_STRUCT   = YES
+EXTRACT_ALL            = NO
+WARN_IF_UNDOCUMENTED   = YES
+WARN_NO_PARAMDOC       = YES

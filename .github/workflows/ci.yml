@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      # whisper.cpp is C++, so this needs more than a Rust toolchain.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config
+      - if: runner.os == 'macOS'
+        run: brew install cmake
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      # Not --all-features: that turns on CUDA and Vulkan, which need
+      # toolchains no runner here has.
+      - run: cargo clippy --workspace --all-targets --features full -- -D warnings
+      - run: cargo test --workspace --features full
+
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The offline claim, checked by the machine rather than by a
+      # reviewer: no interfaces exist inside this namespace at all.
+      - run: cargo build --tests -p edge-stt-core
+      - run: sudo unshare --net -- sudo -u "$USER" cargo test -p edge-stt-core
+
+  header:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cbindgen
+      - run: cargo test -p edge-stt-capi --test header_is_current -- --ignored

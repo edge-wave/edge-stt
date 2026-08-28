@@ -236,6 +236,11 @@ impl RemoteBackend {
                 retry_after: retry_after_ms.map(Duration::from_millis),
             },
             "unauthorized" => Error::CredentialRejected { endpoint },
+            "unsupported_language" => Error::InvalidValue {
+                setting: "language",
+                expected: "one the server was started with".to_string(),
+                got: message.to_string(),
+            },
             _ => Error::ServerError {
                 endpoint,
                 why: message.to_string(),
