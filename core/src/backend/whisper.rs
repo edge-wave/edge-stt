@@ -120,8 +120,10 @@ impl Backend for WhisperBackend {
         })?;
 
         let timed_out = Arc::new(AtomicBool::new(false));
-        let decoded = self.decode(&audio, work, Arc::clone(&timed_out), started)?;
+        let outcome = self.decode(&audio, work, Arc::clone(&timed_out), started);
 
+        // An ending that was asked for wins over whatever the decoder
+        // said on the way out; a stopped encode is what it looks like.
         if work.cancel.is_cancelled() {
             return Err(Error::Cancelled);
         }
@@ -129,6 +131,7 @@ impl Backend for WhisperBackend {
             let limit = work.timeout.unwrap_or_default();
             return Err(Error::Timeout { limit });
         }
+        let decoded = outcome?;
 
         let text: String = decoded.segments.iter().map(|s| s.text.as_str()).collect();
         let confidence = average_confidence(&decoded.segments);
@@ -244,14 +247,30 @@ impl WhisperBackend {
                 collect(&state)
             });
 
+            // Draining until the channel closes would wait forever:
+            // whisper.cpp owns the callback holding the sender, and
+            // does not give it back. The worker finishing is the end.
             let mut seq = 0u32;
-            for data in receiver {
+            let mut hand_over = |work: &mut Work<'_>, data: SegmentCallbackData| {
                 // Filtered here as well as at the end, so joining the
                 // partials still gives the final text exactly.
-                if is_annotation(&data.text) {
-                    continue;
+                if !is_annotation(&data.text) {
+                    work.emit(partial_from(&mut seq, data));
                 }
-                work.emit(partial_from(&mut seq, data));
+            };
+            loop {
+                match receiver.recv_timeout(Duration::from_millis(20)) {
+                    Ok(data) => hand_over(work, data),
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        if worker.is_finished() {
+                            while let Ok(data) = receiver.try_recv() {
+                                hand_over(work, data);
+                            }
+                            break;
+                        }
+                    }
+                }
             }
             worker.join()
         });
