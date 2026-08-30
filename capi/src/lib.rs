@@ -21,14 +21,18 @@ pub use convert::edge_stt_transcript as edge_stt_transcript_t;
 pub use error::edge_stt_error;
 pub use partials::{edge_stt_partial, edge_stt_partial_cb as edge_stt_partial_callback};
 
-/// The handle a C caller holds. Opaque on that side, and named the way
-/// C wants to read it rather than the way Rust would spell it.
+/// What a handle points to. Opaque on the C side, which only ever
+/// names the pointer to this: `edge_stt_h`.
 #[allow(non_camel_case_types)]
-pub struct edge_stt_h {
+pub struct edge_stt_handle {
     core: Mutex<Option<EdgeStt>>,
     settings: Mutex<Settings>,
     cancel: CancelToken,
 }
+
+/// The handle a C caller holds.
+#[allow(non_camel_case_types)]
+pub type edge_stt_h = *mut edge_stt_handle;
 
 #[derive(Default)]
 struct Settings {
@@ -66,8 +70,8 @@ pub extern "C" fn edge_stt_last_error() -> *const c_char {
 /// @see edge_stt_load_model
 /// @see edge_stt_free
 #[unsafe(no_mangle)]
-pub extern "C" fn edge_stt_new() -> *mut edge_stt_h {
-    Box::into_raw(Box::new(edge_stt_h {
+pub extern "C" fn edge_stt_new() -> edge_stt_h {
+    Box::into_raw(Box::new(edge_stt_handle {
         core: Mutex::new(None),
         settings: Mutex::new(Settings::default()),
         cancel: CancelToken::new(),
@@ -78,7 +82,7 @@ pub extern "C" fn edge_stt_new() -> *mut edge_stt_h {
 ///
 /// @param stt The handle, or NULL, which does nothing.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_free(stt: *mut edge_stt_h) {
+pub unsafe extern "C" fn edge_stt_free(stt: edge_stt_h) {
     if !stt.is_null() {
         drop(unsafe { Box::from_raw(stt) });
     }
@@ -92,7 +96,7 @@ pub unsafe extern "C" fn edge_stt_free(stt: *mut edge_stt_h) {
 /// @return 0, or a negative code.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_set_language(
-    stt: *mut edge_stt_h,
+    stt: edge_stt_h,
     language: *const c_char,
 ) -> i32 {
     with!(stt, handle => {
@@ -115,7 +119,7 @@ pub unsafe extern "C" fn edge_stt_set_language(
 /// @param milliseconds The limit, or zero for none.
 /// @return 0, or a negative code.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_set_timeout(stt: *mut edge_stt_h, milliseconds: u64) -> i32 {
+pub unsafe extern "C" fn edge_stt_set_timeout(stt: edge_stt_h, milliseconds: u64) -> i32 {
     with!(stt, handle => {
         settings(handle).timeout =
             (milliseconds > 0).then(|| Duration::from_millis(milliseconds));
@@ -132,7 +136,7 @@ pub unsafe extern "C" fn edge_stt_set_timeout(stt: *mut edge_stt_h, milliseconds
 ///         path was searched.
 /// @see edge_stt_new
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_load_model(stt: *mut edge_stt_h, path: *const c_char) -> i32 {
+pub unsafe extern "C" fn edge_stt_load_model(stt: edge_stt_h, path: *const c_char) -> i32 {
     with!(stt, handle => {
         let path = match required_str(path, "path") {
             Ok(path) => path,
@@ -168,7 +172,7 @@ pub unsafe extern "C" fn edge_stt_load_model(stt: *mut edge_stt_h, path: *const 
 /// @see edge_stt_transcribe
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_on_partial(
-    stt: *mut edge_stt_h,
+    stt: edge_stt_h,
     callback: edge_stt_partial_cb,
     user: *mut c_void,
 ) -> i32 {
@@ -191,7 +195,7 @@ pub unsafe extern "C" fn edge_stt_on_partial(
 /// @see edge_stt_cancel
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcribe(
-    stt: *mut edge_stt_h,
+    stt: edge_stt_h,
     samples: *const i16,
     count: usize,
     sample_rate: u32,
@@ -247,7 +251,7 @@ pub unsafe extern "C" fn edge_stt_transcribe(
 /// @return 0, or a negative code. The transcribing call returns
 ///         EDGE_STT_CANCELLED.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_cancel(stt: *mut edge_stt_h) -> i32 {
+pub unsafe extern "C" fn edge_stt_cancel(stt: edge_stt_h) -> i32 {
     with!(stt, handle => {
         handle.cancel.cancel();
         ok()
@@ -398,7 +402,7 @@ pub unsafe extern "C" fn edge_stt_transcript_free(transcript: *mut edge_stt_tran
     }
 }
 
-fn settings(handle: &edge_stt_h) -> std::sync::MutexGuard<'_, Settings> {
+fn settings(handle: &edge_stt_handle) -> std::sync::MutexGuard<'_, Settings> {
     lock(&handle.settings)
 }
 
