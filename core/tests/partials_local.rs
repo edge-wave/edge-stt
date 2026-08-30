@@ -2,13 +2,13 @@
 
 mod support;
 
-use edge_stt_core::{CancelToken, Config, EdgeStt, ModelSpec, PartialKind, Utterance};
+use edge_stt_core::{CancelToken, Config, EdgeStt, PartialKind, Utterance};
 
 #[test]
 #[ignore = "needs a Whisper model and a recording"]
 fn partials_converge_on_the_final_text() {
     let long = support::long_spoken_sample();
-    let stt = EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model");
+    let stt = EdgeStt::new(Config::local(support::model_spec())).expect("a model");
 
     let cancel = CancelToken::new();
     let mut seen = Vec::new();
@@ -37,7 +37,7 @@ fn nothing_is_held_back_to_be_sent_together() {
     use std::time::Instant;
 
     let long = support::long_spoken_sample();
-    let stt = EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model");
+    let stt = EdgeStt::new(Config::local(support::model_spec())).expect("a model");
 
     let cancel = CancelToken::new();
     let started = Instant::now();
@@ -69,7 +69,7 @@ fn nothing_is_held_back_to_be_sent_together() {
 #[ignore = "needs a Whisper model"]
 fn asking_for_nothing_costs_nothing() {
     let samples = support::silence(2.0);
-    let stt = EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model");
+    let stt = EdgeStt::new(Config::local(support::model_spec())).expect("a model");
 
     let cancel = CancelToken::new();
     let mut seen = 0usize;

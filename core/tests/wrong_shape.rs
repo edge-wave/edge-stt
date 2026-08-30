@@ -6,10 +6,10 @@ mod support;
 use std::time::Duration;
 
 use edge_stt_core::config::{AudioFormat, SampleType};
-use edge_stt_core::{Config, EdgeStt, Error, ModelSpec, Utterance};
+use edge_stt_core::{Config, EdgeStt, Error, Utterance};
 
 fn transcriber(max: Duration) -> EdgeStt {
-    let config = Config::local(ModelSpec::at(support::model_path())).with_max_duration(max);
+    let config = Config::local(support::model_spec()).with_max_duration(max);
     EdgeStt::new(config).expect("a model")
 }
 

@@ -5,10 +5,10 @@ mod support;
 
 use std::time::Duration;
 
-use edge_stt_core::{CancelToken, Config, EdgeStt, Error, ModelSpec, Utterance};
+use edge_stt_core::{CancelToken, Config, EdgeStt, Error, Utterance};
 
 fn transcriber() -> EdgeStt {
-    EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model")
+    EdgeStt::new(Config::local(support::model_spec())).expect("a model")
 }
 
 #[test]

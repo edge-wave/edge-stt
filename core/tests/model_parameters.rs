@@ -4,13 +4,12 @@
 mod support;
 
 use edge_stt_core::backend::whisper::WhisperBackend;
-use edge_stt_core::{Config, Language, ModelSpec};
+use edge_stt_core::{Config, Language};
 
 #[test]
 #[ignore = "needs a Whisper model"]
 fn the_model_is_what_the_documentation_claims() {
-    let path = support::model_path();
-    let spec = ModelSpec::at(&path);
+    let spec = support::model_spec();
     let backend = WhisperBackend::load(&spec, &Config::local(spec.clone())).expect("a model");
     let facts = backend.facts();
 
@@ -31,8 +30,7 @@ fn the_model_is_what_the_documentation_claims() {
 #[test]
 #[ignore = "needs a Whisper model"]
 fn a_monolingual_model_is_refused_when_another_language_is_asked_for() {
-    let path = support::model_path();
-    let spec = ModelSpec::at(&path);
+    let spec = support::model_spec();
     let config = Config::local(spec.clone()).with_language(Language::new("ko"));
 
     // A multilingual model must accept this; the refusal is what the

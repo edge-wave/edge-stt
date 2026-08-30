@@ -3,12 +3,12 @@
 
 mod support;
 
-use edge_stt_core::{Config, EdgeStt, ModelSpec, Utterance};
+use edge_stt_core::{Config, EdgeStt, Utterance};
 
 #[test]
 #[ignore = "needs a Whisper model and runs for hours"]
 fn a_thousand_utterances_lose_none_and_grow_nothing() {
-    let stt = EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model");
+    let stt = EdgeStt::new(Config::local(support::model_spec())).expect("a model");
     let samples = support::silence(1.0);
 
     let mut answered = 0usize;

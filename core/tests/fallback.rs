@@ -6,7 +6,7 @@
 
 mod support;
 
-use edge_stt_core::{Config, EdgeStt, Error, ModelSpec, RemoteConfig, Utterance};
+use edge_stt_core::{Config, EdgeStt, Error, RemoteConfig, Utterance};
 use support::stub_server::{Behaviour, StubServer};
 
 const NOWHERE: &str = "ws://127.0.0.1:1/api/v1/transcribe";
@@ -26,8 +26,8 @@ fn without_fallback_a_remote_failure_reaches_the_caller_untouched() {
 fn with_fallback_a_dead_server_is_answered_by_the_device() {
     use edge_stt_core::BackendKind;
 
-    let config = Config::remote(RemoteConfig::at(NOWHERE))
-        .with_fallback_to_local(ModelSpec::at(support::model_path()));
+    let config =
+        Config::remote(RemoteConfig::at(NOWHERE)).with_fallback_to_local(support::model_spec());
     let stt = EdgeStt::new(config).expect("a client and a model");
 
     let samples = support::silence(1.0);
@@ -46,7 +46,7 @@ fn with_fallback_a_dead_server_is_answered_by_the_device() {
 fn nothing_falls_back_once_the_caller_has_already_seen_words() {
     let server = StubServer::start(Behaviour::DropMidRequest);
     let config = Config::remote(RemoteConfig::at(&server.endpoint))
-        .with_fallback_to_local(ModelSpec::at(support::model_path()));
+        .with_fallback_to_local(support::model_spec());
     let stt = EdgeStt::new(config).expect("a client and a model");
 
     let samples = support::silence(1.0);
