@@ -30,18 +30,18 @@ int main(void) {
     edge_stt_transcript_h out = NULL;
     CHECK(edge_stt_transcribe(stt, samples, 16000, 16000, &out) == EDGE_STT_NO_MODEL);
     CHECK(out == NULL);
-    CHECK(strlen(edge_stt_last_error()) > 0);
+    CHECK(strlen(edge_stt_get_last_error()) > 0);
 
     /* The wrong sample rate is refused, naming what was expected. */
     CHECK(edge_stt_transcribe(stt, samples, 16000, 44100, &out) == EDGE_STT_UNSUPPORTED_AUDIO);
-    CHECK(strstr(edge_stt_last_error(), "16000") != NULL);
+    CHECK(strstr(edge_stt_get_last_error(), "16000") != NULL);
 
     /* Null samples are refused. */
     CHECK(edge_stt_transcribe(stt, NULL, 0, 16000, &out) == EDGE_STT_NULL_ARGUMENT);
 
     /* A model that is not there is found out at load, not at use. */
     CHECK(edge_stt_load_model(stt, "/no/such/model.bin") == EDGE_STT_MODEL_MISSING);
-    CHECK(strstr(edge_stt_last_error(), "/no/such/model.bin") != NULL);
+    CHECK(strstr(edge_stt_get_last_error(), "/no/such/model.bin") != NULL);
 
     /* Settings take before a model is loaded. */
     CHECK(edge_stt_set_language(stt, "ko") == EDGE_STT_OK);

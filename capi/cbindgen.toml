@@ -18,7 +18,7 @@ header = """
  *         --output capi/include/edge_stt.h
  *
  * Errors: every fallible call returns int. 0 is success, negative names
- * the failure, and edge_stt_last_error() describes the most recent one
+ * the failure, and edge_stt_get_last_error() describes the most recent one
  * on this thread.
  *
  * Memory: the caller owns the samples it passes in. Anything the

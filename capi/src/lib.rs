@@ -61,7 +61,7 @@ macro_rules! with {
 /// @return The message, borrowed until the next call on this thread
 ///         fails. Empty when nothing has failed yet.
 #[unsafe(no_mangle)]
-pub extern "C" fn edge_stt_last_error() -> *const c_char {
+pub extern "C" fn edge_stt_get_last_error() -> *const c_char {
     last_message()
 }
 
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn edge_stt_set_timeout(stt: edge_stt_h, milliseconds: u64
 /// @param[in] stt the handle
 /// @param[in] path the ggml file. You supply it; nothing is downloaded
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
-///         edge_stt_last_error() says which path was searched.
+///         edge_stt_get_last_error() says which path was searched.
 /// @see edge_stt_new
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_load_model(stt: edge_stt_h, path: *const c_char) -> i32 {
