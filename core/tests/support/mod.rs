@@ -5,6 +5,8 @@
 
 use std::path::PathBuf;
 
+use edge_stt_core::{Accelerator, ModelSpec};
+
 #[cfg(feature = "remote")]
 pub mod stub_server;
 
@@ -31,6 +33,23 @@ pub fn model_path() -> PathBuf {
         .pop()
         .map(|(_, path)| path)
         .unwrap_or_else(|| panic!("no ggml-*.bin under {dir}"))
+}
+
+/// The model, and the accelerator to run it on. Without the variable
+/// it is the processor, which is what a plain machine has.
+pub fn model_spec() -> ModelSpec {
+    let spec = ModelSpec::at(model_path());
+    let Ok(name) = std::env::var("EDGE_STT_ACCELERATOR") else {
+        return spec;
+    };
+    let accelerator = match name.as_str() {
+        "cpu" => Accelerator::Cpu,
+        "metal" => Accelerator::Metal,
+        "cuda" => Accelerator::Cuda,
+        "vulkan" => Accelerator::Vulkan,
+        other => panic!("{other} is not an accelerator"),
+    };
+    spec.with_accelerator(accelerator)
 }
 
 /// A recording of known speech, and the words in it.

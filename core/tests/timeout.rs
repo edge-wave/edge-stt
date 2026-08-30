@@ -5,13 +5,13 @@ mod support;
 
 use std::time::{Duration, Instant};
 
-use edge_stt_core::{CancelToken, Config, EdgeStt, Error, ModelSpec, Utterance};
+use edge_stt_core::{CancelToken, Config, EdgeStt, Error, Utterance};
 
 #[test]
 #[ignore = "needs a Whisper model"]
 fn a_limit_shorter_than_the_work_is_reported_as_a_timeout() {
     let limit = Duration::from_millis(150);
-    let config = Config::local(ModelSpec::at(support::model_path())).with_timeout(limit);
+    let config = Config::local(support::model_spec()).with_timeout(limit);
     let stt = EdgeStt::new(config).expect("a model");
 
     let (samples, _) = support::spoken_sample();
@@ -43,8 +43,7 @@ fn a_limit_shorter_than_the_work_is_reported_as_a_timeout() {
 #[test]
 #[ignore = "needs a Whisper model"]
 fn a_timeout_is_not_a_cancellation() {
-    let config = Config::local(ModelSpec::at(support::model_path()))
-        .with_timeout(Duration::from_millis(150));
+    let config = Config::local(support::model_spec()).with_timeout(Duration::from_millis(150));
     let stt = EdgeStt::new(config).expect("a model");
 
     let (samples, _) = support::spoken_sample();
@@ -67,8 +66,7 @@ fn a_timeout_is_not_a_cancellation() {
 #[test]
 #[ignore = "needs a Whisper model"]
 fn a_generous_limit_lets_the_work_finish() {
-    let config =
-        Config::local(ModelSpec::at(support::model_path())).with_timeout(Duration::from_secs(300));
+    let config = Config::local(support::model_spec()).with_timeout(Duration::from_secs(300));
     let stt = EdgeStt::new(config).expect("a model");
     let (samples, expected) = support::spoken_sample();
 

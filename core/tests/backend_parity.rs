@@ -49,7 +49,7 @@ fn both_backends_answer_the_same_caller_the_same_way() {
     let (samples, expected) = support::spoken_sample();
 
     let local = EdgeStt::new(
-        edge_stt_core::Config::local(edge_stt_core::ModelSpec::at(support::model_path()))
+        edge_stt_core::Config::local(support::model_spec())
             .with_language(edge_stt_core::Language::new(support::sample_language())),
     )
     .expect("a model");

@@ -2,14 +2,14 @@
 
 mod support;
 
-use edge_stt_core::{BackendKind, Config, EdgeStt, Language, ModelSpec, Utterance};
+use edge_stt_core::{BackendKind, Config, EdgeStt, Language, Utterance};
 
 #[test]
 #[ignore = "needs a Whisper model and a recording"]
 fn three_lines_are_enough() {
     let (samples, expected) = support::spoken_sample();
 
-    let config = Config::local(ModelSpec::at(support::model_path()))
+    let config = Config::local(support::model_spec())
         .with_language(Language::new(support::sample_language()));
     let stt = EdgeStt::new(config).expect("a model");
     let transcript = stt

@@ -8,7 +8,7 @@ mod support;
 use std::process::Command;
 
 #[cfg(not(feature = "remote"))]
-use edge_stt_core::{Config, EdgeStt, ModelSpec, Utterance};
+use edge_stt_core::{Config, EdgeStt, Utterance};
 
 /// A build that can reach a server is not the build this file is
 /// about; everything here is checked without the remote feature.
@@ -40,7 +40,7 @@ fn transcribing_on_the_device_opens_no_socket() {
         "the test process already holds sockets: {before:?}"
     );
 
-    let stt = EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model");
+    let stt = EdgeStt::new(Config::local(support::model_spec())).expect("a model");
     let samples = support::silence(2.0);
     stt.transcribe(&Utterance::mono_16k(&samples))
         .expect("a transcript");

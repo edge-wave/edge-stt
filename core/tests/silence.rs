@@ -3,10 +3,14 @@
 
 mod support;
 
-use edge_stt_core::{Config, EdgeStt, ModelSpec, Utterance};
+use edge_stt_core::{Config, EdgeStt, Language, Utterance};
 
+/// The language is set, the way a device sets it. Left to detection,
+/// small answers three seconds of hiss with a page of invented words.
 fn transcriber() -> EdgeStt {
-    EdgeStt::new(Config::local(ModelSpec::at(support::model_path()))).expect("a model")
+    let config = Config::local(support::model_spec())
+        .with_language(Language::new(support::sample_language()));
+    EdgeStt::new(config).expect("a model")
 }
 
 #[test]
