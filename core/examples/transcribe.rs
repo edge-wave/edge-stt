@@ -1,24 +1,40 @@
 //! Read a wav, print what was said, and say what it cost.
 //!
-//! usage: transcribe [--partials] [--bench] [--language ko] <model> <wav>...
+//! usage: transcribe [--partials] [--bench] [--language ko]
+//!                   [--accelerator metal] [--threads 4] <model> <wav>...
 
 use std::process::ExitCode;
 use std::time::Instant;
 
-use edge_stt_core::{CancelToken, Config, EdgeStt, Language, ModelSpec, Transcript, Utterance};
+use edge_stt_core::{
+    Accelerator, CancelToken, Config, EdgeStt, Language, ModelSpec, Transcript, Utterance,
+};
+
+const USAGE: &str = "usage: transcribe [--partials] [--bench] [--language ko] \
+                     [--accelerator cpu|metal|cuda|vulkan] [--threads N] <model> <wav>...";
 
 struct Args {
     partials: bool,
     bench: bool,
     language: Option<String>,
+    accelerator: Option<String>,
+    threads: Option<u16>,
     model: String,
     wavs: Vec<String>,
 }
 
 fn main() -> ExitCode {
     let Some(args) = parse(std::env::args().skip(1)) else {
-        eprintln!("usage: transcribe [--partials] [--bench] [--language ko] <model> <wav>...");
+        eprintln!("{USAGE}");
         return ExitCode::FAILURE;
+    };
+
+    let model = match local_model(&args) {
+        Ok(model) => model,
+        Err(why) => {
+            eprintln!("{why}");
+            return ExitCode::FAILURE;
+        }
     };
 
     // The whole of switching to a server: one setting, no code.
@@ -40,7 +56,7 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        Err(_) => Config::local(ModelSpec::at(&args.model)),
+        Err(_) => Config::local(model),
     };
     if let Some(tag) = &args.language {
         config = config.with_language(Language::new(tag));
@@ -116,13 +132,37 @@ fn report(wav: &str, transcript: &Transcript, args: &Args) {
         return;
     }
     println!(
-        "{wav}: {:.2?} of audio in {:.2?} ({:.2}x), language {}, {} segments",
+        "{wav}: {:.2?} of audio in {:.2?} ({:.2}x), language {}, {} segments, confidence {:.2}",
         transcript.audio_duration,
         transcript.processing_time,
         transcript.real_time_factor(),
         transcript.language,
         transcript.segments.len(),
+        transcript.confidence,
     );
+}
+
+/// The accelerator has to be asked for. A build carrying Metal still
+/// decodes on the processor until something says so.
+fn local_model(args: &Args) -> Result<ModelSpec, String> {
+    let mut model = ModelSpec::at(&args.model);
+    if let Some(name) = &args.accelerator {
+        let accelerator = match name.as_str() {
+            "cpu" => Accelerator::Cpu,
+            "metal" => Accelerator::Metal,
+            "cuda" => Accelerator::Cuda,
+            "vulkan" => Accelerator::Vulkan,
+            other => return Err(format!("{other} is not an accelerator this knows")),
+        };
+        model = model.with_accelerator(accelerator);
+    }
+    if let Some(threads) = args.threads {
+        if threads == 0 {
+            return Err("a decode needs at least one thread".to_string());
+        }
+        model = model.with_threads(threads);
+    }
+    Ok(model)
 }
 
 fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
@@ -130,6 +170,8 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
         partials: false,
         bench: false,
         language: None,
+        accelerator: None,
+        threads: None,
         model: String::new(),
         wavs: vec![],
     };
@@ -139,6 +181,8 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
             "--partials" => parsed.partials = true,
             "--bench" => parsed.bench = true,
             "--language" => parsed.language = Some(args.next()?),
+            "--accelerator" => parsed.accelerator = Some(args.next()?),
+            "--threads" => parsed.threads = Some(args.next()?.parse().ok()?),
             other => positional.push(other.to_string()),
         }
     }
