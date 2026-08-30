@@ -13,11 +13,12 @@ use std::time::Duration;
 
 use edge_stt_core::{CancelToken, Config, EdgeStt, Language, ModelSpec, Utterance};
 
-use convert::{edge_stt_transcript, out_ptr, required_str};
+use convert::{edge_stt_transcript_handle, out_box, required_str};
 use error::*;
 use partials::{deliver, edge_stt_partial_cb};
 
-pub use convert::edge_stt_transcript as edge_stt_transcript_t;
+pub use convert::edge_stt_transcript_h;
+pub use convert::edge_stt_transcript_handle as edge_stt_transcript_t;
 pub use error::edge_stt_error;
 pub use partials::{edge_stt_partial, edge_stt_partial_cb as edge_stt_partial_callback};
 
@@ -199,7 +200,7 @@ pub unsafe extern "C" fn edge_stt_transcribe(
     samples: *const i16,
     count: usize,
     sample_rate: u32,
-    out: *mut *mut edge_stt_transcript,
+    out: *mut edge_stt_transcript_h,
 ) -> i32 {
     with!(stt, handle => {
         if samples.is_null() {
@@ -235,7 +236,7 @@ pub unsafe extern "C" fn edge_stt_transcribe(
 
         match outcome {
             Ok(transcript) => {
-                match out_ptr(out, edge_stt_transcript::from_core(&transcript), "out") {
+                match unsafe { out_box(out, edge_stt_transcript_handle::from_core(&transcript), "out") } {
                     Ok(()) => ok(),
                     Err(code) => code,
                 }
@@ -263,8 +264,8 @@ pub unsafe extern "C" fn edge_stt_cancel(stt: edge_stt_h) -> i32 {
 /// @param[in] transcript the transcript
 /// @return The text, owned by the transcript, or NULL.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_text(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_text(
+    transcript: edge_stt_transcript_h,
 ) -> *const c_char {
     match unsafe { transcript.as_ref() } {
         Some(held) => held.text.as_ptr(),
@@ -277,8 +278,8 @@ pub unsafe extern "C" fn edge_stt_transcript_text(
 /// @param[in] transcript the transcript
 /// @return The tag, owned by the transcript, or NULL.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_language(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_language(
+    transcript: edge_stt_transcript_h,
 ) -> *const c_char {
     match unsafe { transcript.as_ref() } {
         Some(held) => held.language.as_ptr(),
@@ -291,9 +292,7 @@ pub unsafe extern "C" fn edge_stt_transcript_language(
 /// @param[in] transcript the transcript
 /// @return The duration, or zero.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_audio_ms(
-    transcript: *const edge_stt_transcript,
-) -> u64 {
+pub unsafe extern "C" fn edge_stt_transcript_get_audio_ms(transcript: edge_stt_transcript_h) -> u64 {
     unsafe { transcript.as_ref() }.map_or(0, |held| held.audio_duration_ms)
 }
 
@@ -303,8 +302,8 @@ pub unsafe extern "C" fn edge_stt_transcript_audio_ms(
 /// @param[in] transcript the transcript
 /// @return The time taken, or zero.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_processing_ms(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_processing_ms(
+    transcript: edge_stt_transcript_h,
 ) -> u64 {
     unsafe { transcript.as_ref() }.map_or(0, |held| held.processing_time_ms)
 }
@@ -314,8 +313,8 @@ pub unsafe extern "C" fn edge_stt_transcript_processing_ms(
 /// @param[in] transcript the transcript
 /// @return The confidence, or zero.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_confidence(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_confidence(
+    transcript: edge_stt_transcript_h,
 ) -> f32 {
     unsafe { transcript.as_ref() }.map_or(0.0, |held| held.confidence)
 }
@@ -325,8 +324,8 @@ pub unsafe extern "C" fn edge_stt_transcript_confidence(
 /// @param[in] transcript the transcript
 /// @return The count, or zero.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_segment_count(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_segment_count(
+    transcript: edge_stt_transcript_h,
 ) -> usize {
     unsafe { transcript.as_ref() }.map_or(0, |held| held.segments.len())
 }
@@ -334,11 +333,11 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_count(
 /// @brief One segment's words.
 ///
 /// @param[in] transcript the transcript
-/// @param[in] index below edge_stt_transcript_segment_count
+/// @param[in] index below edge_stt_transcript_get_segment_count
 /// @return The text, owned by the transcript, or NULL when out of range.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_segment_text(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_segment_text(
+    transcript: edge_stt_transcript_h,
     index: usize,
 ) -> *const c_char {
     match unsafe { transcript.as_ref() }.and_then(|held| held.segments.get(index)) {
@@ -350,11 +349,11 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_text(
 /// @brief Where one segment starts, in milliseconds from the start.
 ///
 /// @param[in] transcript the transcript
-/// @param[in] index below edge_stt_transcript_segment_count
+/// @param[in] index below edge_stt_transcript_get_segment_count
 /// @return The offset, or zero when out of range.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_segment_start_ms(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_segment_start_ms(
+    transcript: edge_stt_transcript_h,
     index: usize,
 ) -> u64 {
     unsafe { transcript.as_ref() }
@@ -365,11 +364,11 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_start_ms(
 /// @brief Where one segment ends, in milliseconds from the start.
 ///
 /// @param[in] transcript the transcript
-/// @param[in] index below edge_stt_transcript_segment_count
+/// @param[in] index below edge_stt_transcript_get_segment_count
 /// @return The offset, or zero when out of range.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_segment_end_ms(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_segment_end_ms(
+    transcript: edge_stt_transcript_h,
     index: usize,
 ) -> u64 {
     unsafe { transcript.as_ref() }
@@ -380,11 +379,11 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_end_ms(
 /// @brief How sure the model is about one segment.
 ///
 /// @param[in] transcript the transcript
-/// @param[in] index below edge_stt_transcript_segment_count
+/// @param[in] index below edge_stt_transcript_get_segment_count
 /// @return Between zero and one, or zero when out of range.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_segment_confidence(
-    transcript: *const edge_stt_transcript,
+pub unsafe extern "C" fn edge_stt_transcript_get_segment_confidence(
+    transcript: edge_stt_transcript_h,
     index: usize,
 ) -> f32 {
     unsafe { transcript.as_ref() }
@@ -396,7 +395,7 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_confidence(
 ///
 /// @param[in] transcript the transcript, or NULL, which does nothing
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_free(transcript: *mut edge_stt_transcript) {
+pub unsafe extern "C" fn edge_stt_transcript_free(transcript: edge_stt_transcript_h) {
     if !transcript.is_null() {
         drop(unsafe { Box::from_raw(transcript) });
     }

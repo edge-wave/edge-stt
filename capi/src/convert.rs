@@ -22,7 +22,11 @@ pub fn required_str<'a>(value: *const c_char, name: &str) -> Result<&'a str, i32
     })
 }
 
-pub fn out_ptr<T>(slot: *mut *mut T, value: T, name: &str) -> Result<(), i32> {
+/// Allocate an owned value behind a caller's out pointer.
+///
+/// # Safety
+/// `slot` must be valid for writes for the length of the call.
+pub unsafe fn out_box<T>(slot: *mut *mut T, value: T, name: &str) -> Result<(), i32> {
     if slot.is_null() {
         return Err(fail_with(
             edge_stt_error::EDGE_STT_NULL_ARGUMENT,
@@ -33,10 +37,11 @@ pub fn out_ptr<T>(slot: *mut *mut T, value: T, name: &str) -> Result<(), i32> {
     Ok(())
 }
 
-/// What a C caller reads a transcript through. Owns its strings so the
-/// caller never has to free one separately.
+/// What a transcript handle points to. Opaque on the C side, which
+/// only ever names the pointer to this: `edge_stt_transcript_h`. Owns
+/// its strings so the caller never has to free one separately.
 #[allow(non_camel_case_types)]
-pub struct edge_stt_transcript {
+pub struct edge_stt_transcript_handle {
     pub(crate) text: CString,
     pub(crate) language: CString,
     pub(crate) confidence: f32,
@@ -45,6 +50,10 @@ pub struct edge_stt_transcript {
     pub(crate) segments: Vec<Segment>,
 }
 
+/// The handle a C caller holds for one transcript.
+#[allow(non_camel_case_types)]
+pub type edge_stt_transcript_h = *mut edge_stt_transcript_handle;
+
 pub struct Segment {
     pub(crate) text: CString,
     pub(crate) start_ms: u64,
@@ -52,7 +61,7 @@ pub struct Segment {
     pub(crate) confidence: f32,
 }
 
-impl edge_stt_transcript {
+impl edge_stt_transcript_handle {
     pub fn from_core(transcript: &Transcript) -> Self {
         Self {
             text: cstring(&transcript.text),

@@ -27,7 +27,7 @@ int main(void) {
 
     /* Transcribing before a model is loaded says exactly that. */
     int16_t samples[16000] = {0};
-    edge_stt_transcript *out = NULL;
+    edge_stt_transcript_h out = NULL;
     CHECK(edge_stt_transcribe(stt, samples, 16000, 16000, &out) == EDGE_STT_NO_MODEL);
     CHECK(out == NULL);
     CHECK(strlen(edge_stt_last_error()) > 0);
@@ -53,11 +53,11 @@ int main(void) {
     CHECK(edge_stt_cancel(stt) == EDGE_STT_OK);
 
     /* Accessors on a null transcript give nothing rather than crash. */
-    CHECK(edge_stt_transcript_text(NULL) == NULL);
-    CHECK(edge_stt_transcript_language(NULL) == NULL);
-    CHECK(edge_stt_transcript_segment_count(NULL) == 0);
-    CHECK(edge_stt_transcript_segment_text(NULL, 0) == NULL);
-    CHECK(edge_stt_transcript_audio_ms(NULL) == 0);
+    CHECK(edge_stt_transcript_get_text(NULL) == NULL);
+    CHECK(edge_stt_transcript_get_language(NULL) == NULL);
+    CHECK(edge_stt_transcript_get_segment_count(NULL) == 0);
+    CHECK(edge_stt_transcript_get_segment_text(NULL, 0) == NULL);
+    CHECK(edge_stt_transcript_get_audio_ms(NULL) == 0);
     edge_stt_transcript_free(NULL);
 
     edge_stt_free(stt);
