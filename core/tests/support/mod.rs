@@ -13,7 +13,7 @@ pub mod stub_server;
 pub fn model_path() -> PathBuf {
     let dir = std::env::var("EDGE_STT_MODEL_DIR")
         .expect("set EDGE_STT_MODEL_DIR to a directory holding a ggml Whisper model");
-    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&dir)
+    let mut candidates: Vec<(u64, PathBuf)> = std::fs::read_dir(&dir)
         .unwrap_or_else(|why| panic!("{dir}: {why}"))
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter(|path| {
@@ -22,12 +22,17 @@ pub fn model_path() -> PathBuf {
                     .file_name()
                     .is_some_and(|n| n.to_string_lossy().starts_with("ggml-"))
         })
+        .filter_map(|path| std::fs::metadata(&path).ok().map(|m| (m.len(), path)))
         .collect();
+    // The biggest one present. The smallest is fastest and bad enough
+    // on short clips that a test would measure the model, not us.
     candidates.sort();
     candidates
         .pop()
+        .map(|(_, path)| path)
         .unwrap_or_else(|| panic!("no ggml-*.bin under {dir}"))
 }
+
 
 /// A recording of known speech, and the words in it.
 pub fn spoken_sample() -> (Vec<i16>, String) {
@@ -36,6 +41,23 @@ pub fn spoken_sample() -> (Vec<i16>, String) {
     let expected = std::env::var("EDGE_STT_SAMPLE_TEXT")
         .expect("set EDGE_STT_SAMPLE_TEXT to the words spoken in EDGE_STT_SAMPLE_WAV");
     (read_wav(&path), expected)
+}
+
+/// The language the sample is in. Left to detection, a short clip and
+/// a small model guess badly, and the test measures the guess.
+pub fn sample_language() -> String {
+    std::env::var("EDGE_STT_SAMPLE_LANGUAGE").unwrap_or_else(|_| "en".to_string())
+}
+
+/// A longer recording, for the tests that need several segments.
+/// Never built by repeating a short one: Whisper degrades badly on
+/// repetitive audio -- measured at fourteen times slower here, and it
+/// collapses twenty seconds into a single segment.
+pub fn long_spoken_sample() -> Vec<i16> {
+    match std::env::var("EDGE_STT_LONG_WAV") {
+        Ok(path) => read_wav(&path),
+        Err(_) => spoken_sample().0,
+    }
 }
 
 pub fn read_wav(path: &str) -> Vec<i16> {

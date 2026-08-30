@@ -38,6 +38,34 @@ uptime          # load average well under the core count
 sysctl -n hw.ncpu
 ```
 
+## Two things worth knowing before you measure
+
+Both were found by running the suite on a machine under heavy load,
+and both are real.
+
+**Whisper collapses on repetitive audio.** The same model, the same
+machine, the same minute:
+
+| Input | Audio | Decoding | Real-time factor | Segments |
+|---|---|---|---|---|
+| Varied speech | 16.3 s | 1,307 s | 80x | 4 |
+| One second repeated twenty times | 20.0 s | 23,029 s | 1,151x | 1 |
+
+Fourteen times slower, and twenty seconds collapsed into one segment.
+Whisper starts repeating itself and whisper.cpp answers by decoding the
+same window again at a higher temperature, up to six times. Never build
+test audio by looping a short clip, and set a timeout if a caller might
+hand you a stuck microphone.
+
+**Threads are worth less than they look when the machine is shared.**
+Asking for twelve threads on a machine where you get about one core's
+worth of time made the process run at 118% CPU, not 1200%.
+whisper.cpp's thread pool synchronises with spinning barriers at every
+graph node, so oversubscription costs far more than the missing cores
+would suggest. `ModelSpec::with_threads` exists for this; the default
+of one thread per core is right for a device that owns itself and wrong
+for one that shares.
+
 ## Still to measure
 
 The two reference machines named in the plan, every model size, Korean
