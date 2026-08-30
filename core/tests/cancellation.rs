@@ -34,6 +34,8 @@ fn cancelling_before_the_start_returns_at_once() {
 fn cancelling_from_another_thread_stops_the_decoder() {
     let stt = transcriber();
     let (samples, _) = support::spoken_sample();
+    // Repeated on purpose: this audio is never decoded to the end,
+    // and Whisper is slow on repetition, which is not a problem here.
     let long: Vec<i16> = samples.iter().cycle().take(16_000 * 60).copied().collect();
 
     let cancel = CancelToken::new();
