@@ -5,8 +5,8 @@ use std::ffi::{CString, c_char};
 
 use edge_stt_core::Error;
 
-/// @brief What went wrong. Zero is success; everything else is
-///        negative, one value for each failure the core reports.
+/// What went wrong. Zero is success; everything else is negative, one
+/// value for each failure the core reports.
 #[repr(i32)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(non_camel_case_types)]
