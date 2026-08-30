@@ -9,7 +9,28 @@ cargo run --release --example transcribe -- --bench MODEL sample.wav
 
 ## What has actually been measured
 
-Nothing usable. One figure was taken and it is void.
+One set, on one machine, on the GPU. The processor path on that machine
+is still void, for the reason below.
+
+### Apple M4 Pro, Metal, Korean
+
+9.20 s of Korean speech, the language named rather than detected, taking
+the second run of each model so the GPU is warm:
+
+| Model | Decoding | Real-time factor | What came back |
+|---|---|---|---|
+| `tiny-q5_1` | 185 ms | 0.02x | one word wrong |
+| `base-q5_1` | 203 ms | 0.02x | right |
+| `small-q5_1` | 476 ms | 0.05x | right |
+
+Read it for what it is. This is the reference host, not the reference
+device — a Raspberry Pi has no Metal and none of these numbers carry
+over to it. The audio is speech synthesised by macOS, which is cleaner
+and more evenly paced than any microphone will hand you. And the first
+run of a model pays for warming the GPU up: `tiny` took 3.03 s cold and
+185 ms warm, which is why the cold figure is not in the table.
+
+### The void reading
 
 | Machine | Build | Model | Audio | Decoding | Real-time factor |
 |---|---|---|---|---|---|

@@ -116,6 +116,93 @@ The words are "the quick brown fox jumps over the lazy dog". Nothing
 went wrong that an error could report: the model was asked to guess, it
 guessed Korean with some confidence, and then it did what it was told.
 
+Leaving the guess open costs more than a wrong language. Given three
+seconds of hiss and no language, `small-q5_1` invented this:
+
+```
+ographer  diarrhoca 제가 ľa ľa ľa ḍm ḍm ḍm ḍm ḍm ...
+```
+
+It reported the language as Norwegian Nynorsk, took 3.6 times real time
+to do it, and rated itself **1.00 confident**. So confidence will not
+save you here; the setting will. Name the language and the same model,
+the same hiss, comes back empty in a third of a second — thirty times
+faster, because a decoder that is guessing also keeps retrying itself at
+higher temperatures.
+
+## Korean invents words when nothing was said
+
+This is the one that has to be read before shipping Korean. Given three
+seconds of digital silence, and three seconds of hiss, with the language
+named:
+
+| Model | Korean | English |
+|---|---|---|
+| `tiny-q5_1` | empty, both | empty, both |
+| `base-q5_1` | hiss → `-이거 너무 좋아요.` | empty, both |
+| `small-q5_1` | silence → `-감사합니다.` | empty, both |
+
+The same models, the same recordings, the same machine — only the
+language differs. In English every size answers nothing with nothing. In
+Korean everything above `tiny` answers with a stock phrase off the end
+of a video, which is where the training data came from.
+
+Nothing here can be caught downstream by looking at the result: the
+words are ordinary Korean, and the model rates them as confidently as it
+rates real speech. So it is caught upstream instead, before the audio
+ever reaches a decoder.
+
+### The gate
+
+edge-ear already knows the answer. It runs voice detection on every
+frame while it records, and it says why a recording ended:
+
+| Reason | What it means |
+|---|---|
+| `Silence` | they spoke, then went quiet |
+| `MaxLength` | the length cap arrived while they were still talking |
+| `NoSpeech` | nothing was ever said |
+| `Stopped` | the application ended it |
+
+A recording that ends in `NoSpeech` is not transcribed. That is the
+whole of it, it lives in the code between the two libraries, and neither
+library changes:
+
+```rust
+Event::SpeechEnded { audio, reason, .. } => {
+    if reason == EndReason::NoSpeech {
+        continue;
+    }
+    let transcript = stt.transcribe(&Utterance::mono_16k(&audio))?;
+}
+```
+
+`examples/from_edge_ear.rs` is that gate, runnable. Give it the same
+three seconds of silence twice and only the reason differs:
+
+```
+--reason no-speech   NoSpeech: nothing was said, so nothing is transcribed
+--reason silence     Silence: -감사합니다.
+```
+
+### What the gate does not cover
+
+Two gaps, both real:
+
+- Voice detection sets its flag if **any** frame was speech. A short
+  sentence followed by quiet still ends in `Silence`, and the quiet tail
+  goes to the decoder with it. edge-ear cuts that tail at its silence
+  limit, so it is bounded, not absent.
+- `MaxLength` is decided before the speech check. It only means "the cap
+  arrived", not "someone spoke", so a recording with nothing in it comes
+  back as `MaxLength` whenever the no-speech timeout is set longer than
+  the length cap. Set it shorter.
+
+`core/tests/silence.rs` states the promise the model breaks. It hands a
+decoder pure silence directly — which is exactly the call this gate
+stops from happening — so with a Korean sample and a model above `tiny`
+it fails, correctly, and says so.
+
 ## Running it on the device
 
 Default features are the on-device build: whisper.cpp and no network

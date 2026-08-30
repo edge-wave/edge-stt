@@ -85,3 +85,12 @@ default:
 ```bash
 EDGE_STT_MODEL_DIR=~/models/whisper cargo test --workspace -- --ignored
 ```
+
+They decode on the processor unless told otherwise, which on a shared
+machine is slow enough to look broken. Name the accelerator the build
+carries and they run on it instead:
+
+```bash
+EDGE_STT_ACCELERATOR=metal cargo test --release -p edge-stt-core \
+    --features metal -- --ignored
+```
