@@ -96,10 +96,7 @@ pub unsafe extern "C" fn edge_stt_free(stt: edge_stt_h) {
 /// @param[in] language a tag such as "ko", or NULL to detect
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_set_language(
-    stt: edge_stt_h,
-    language: *const c_char,
-) -> i32 {
+pub unsafe extern "C" fn edge_stt_set_language(stt: edge_stt_h, language: *const c_char) -> i32 {
     with!(stt, handle => {
         let chosen = if language.is_null() {
             None
@@ -292,7 +289,9 @@ pub unsafe extern "C" fn edge_stt_transcript_get_language(
 /// @param[in] transcript the transcript
 /// @return The duration, or zero.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_transcript_get_audio_ms(transcript: edge_stt_transcript_h) -> u64 {
+pub unsafe extern "C" fn edge_stt_transcript_get_audio_ms(
+    transcript: edge_stt_transcript_h,
+) -> u64 {
     unsafe { transcript.as_ref() }.map_or(0, |held| held.audio_duration_ms)
 }
 
