@@ -33,7 +33,6 @@ pub fn model_path() -> PathBuf {
         .unwrap_or_else(|| panic!("no ggml-*.bin under {dir}"))
 }
 
-
 /// A recording of known speech, and the words in it.
 pub fn spoken_sample() -> (Vec<i16>, String) {
     let path = std::env::var("EDGE_STT_SAMPLE_WAV")

@@ -27,15 +27,17 @@ fn a_limit_shorter_than_the_work_is_reported_as_a_timeout() {
         Err(Error::Timeout { limit: reported }) => assert_eq!(reported, limit),
         other => panic!("expected a timeout, got {other:?}"),
     }
-    // The abort is seen between the decoder's own steps, and how long
-    // one of those takes belongs to the machine. What must hold is
-    // that it gave up rather than transcribing the whole two minutes.
+    // One of the decoder's steps takes as long as the machine says.
+    // What must hold is that it gave up rather than finishing.
     let one_clip = stt
         .transcribe(&Utterance::mono_16k(&samples))
         .map(|t| t.processing_time)
         .unwrap_or(Duration::from_secs(1));
     let all_of_it = one_clip * 60;
-    assert!(waited < all_of_it, "it waited {waited:?}; the whole would take about {all_of_it:?}");
+    assert!(
+        waited < all_of_it,
+        "it waited {waited:?}; the whole would take about {all_of_it:?}"
+    );
 }
 
 #[test]
