@@ -38,8 +38,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # The offline claim, checked by the machine rather than by a
       # reviewer: no interfaces exist inside this namespace at all.
-      - run: cargo build --tests -p edge-stt-core
-      - run: sudo unshare --net -- sudo -u "$USER" cargo test -p edge-stt-core
+      # The binaries are run directly, because a nested sudo loses the
+      # PATH that cargo lives on.
+      - run: cargo test --no-run -p edge-stt-core
+      - name: Run the tests where there is no network
+        run: |
+          cargo test --no-run -p edge-stt-core --message-format=json \
+            | jq -r 'select(.profile.test == true) | .executable | values' \
+            | while read -r binary; do
+                echo "== $binary"
+                sudo unshare --net "$binary" < /dev/null
+              done
 
   header:
     runs-on: ubuntu-latest

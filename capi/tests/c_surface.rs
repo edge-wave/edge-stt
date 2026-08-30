@@ -14,8 +14,26 @@ fn target_directory() -> PathBuf {
     })
 }
 
+/// The shared library is not built by `cargo test`, only the rlib the
+/// harness needs, so ask for it rather than hoping someone built it.
+fn build_the_library() {
+    let mut cargo = Command::new(env!("CARGO"));
+    cargo.args(["build", "-p", "edge-stt-capi"]);
+    if !cfg!(debug_assertions) {
+        cargo.arg("--release");
+    }
+    let built = cargo.output().expect("cargo to run");
+    assert!(
+        built.status.success(),
+        "the library did not build: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+}
+
 #[test]
 fn a_c_program_can_use_the_header() {
+    build_the_library();
+
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let built = target_directory();
     let program = std::env::temp_dir().join("edge_stt_surface");
