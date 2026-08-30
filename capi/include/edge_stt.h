@@ -181,9 +181,8 @@ const char *edge_stt_last_error(void);
 /**
  * @brief Make a handle. Load a model into it before transcribing.
  *
- * @return The handle, or NULL when it could not be made.
- * @see edge_stt_load_model
- * @see edge_stt_free
+ * @return The handle. Making one cannot fail.
+ * @see edge_stt_load_model, edge_stt_free
  */
 edge_stt_h edge_stt_new(void);
 
