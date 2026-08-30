@@ -66,9 +66,8 @@ pub extern "C" fn edge_stt_last_error() -> *const c_char {
 
 /// @brief Make a handle. Load a model into it before transcribing.
 ///
-/// @return The handle, or NULL when it could not be made.
-/// @see edge_stt_load_model
-/// @see edge_stt_free
+/// @return The handle. Making one cannot fail.
+/// @see edge_stt_load_model, edge_stt_free
 #[unsafe(no_mangle)]
 pub extern "C" fn edge_stt_new() -> edge_stt_h {
     Box::into_raw(Box::new(edge_stt_handle {
