@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    edge_stt_h *stt = edge_stt_new();
+    edge_stt_h stt = edge_stt_new();
     if (!stt) {
         fprintf(stderr, "%s\n", edge_stt_last_error());
         return 1;

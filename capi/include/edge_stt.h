@@ -117,16 +117,21 @@ typedef int32_t edge_stt_error;
 #endif // __cplusplus
 
 /**
- * The handle a C caller holds. Opaque on that side, and named the way
- * C wants to read it rather than the way Rust would spell it.
+ * What a handle points to. Opaque on the C side, which only ever
+ * names the pointer to this: `edge_stt_h`.
  */
-typedef struct edge_stt_h edge_stt_h;
+typedef struct edge_stt_handle edge_stt_handle;
 
 /**
  * What a C caller reads a transcript through. Owns its strings so the
  * caller never has to free one separately.
  */
 typedef struct edge_stt_transcript edge_stt_transcript;
+
+/**
+ * The handle a C caller holds.
+ */
+typedef edge_stt_handle *edge_stt_h;
 
 /**
  * What a partial callback is handed. Everything in it is borrowed for
@@ -180,14 +185,14 @@ const char *edge_stt_last_error(void);
  * @see edge_stt_load_model
  * @see edge_stt_free
  */
-edge_stt_h *edge_stt_new(void);
+edge_stt_h edge_stt_new(void);
 
 /**
  * @brief Release the handle and everything it owns.
  *
  * @param stt The handle, or NULL, which does nothing.
  */
-void edge_stt_free(edge_stt_h *stt);
+void edge_stt_free(edge_stt_h stt);
 
 /**
  * @brief Set the language before loading a model, or leave it unset
@@ -197,7 +202,7 @@ void edge_stt_free(edge_stt_h *stt);
  * @param language A tag such as "ko", or NULL to detect.
  * @return 0, or a negative code.
  */
-int32_t edge_stt_set_language(edge_stt_h *stt, const char *language);
+int32_t edge_stt_set_language(edge_stt_h stt, const char *language);
 
 /**
  * @brief Give up on a transcription that takes longer than this.
@@ -206,7 +211,7 @@ int32_t edge_stt_set_language(edge_stt_h *stt, const char *language);
  * @param milliseconds The limit, or zero for none.
  * @return 0, or a negative code.
  */
-int32_t edge_stt_set_timeout(edge_stt_h *stt, uint64_t milliseconds);
+int32_t edge_stt_set_timeout(edge_stt_h stt, uint64_t milliseconds);
 
 /**
  * @brief Load a model, which is when a missing or unusable file is
@@ -218,7 +223,7 @@ int32_t edge_stt_set_timeout(edge_stt_h *stt, uint64_t milliseconds);
  *         path was searched.
  * @see edge_stt_new
  */
-int32_t edge_stt_load_model(edge_stt_h *stt, const char *path);
+int32_t edge_stt_load_model(edge_stt_h stt, const char *path);
 
 /**
  * @brief Ask to be told about words as they are decoded.
@@ -230,7 +235,7 @@ int32_t edge_stt_load_model(edge_stt_h *stt, const char *path);
  * @return 0, or a negative code.
  * @see edge_stt_transcribe
  */
-int32_t edge_stt_on_partial(edge_stt_h *stt, edge_stt_partial_cb callback, void *user);
+int32_t edge_stt_on_partial(edge_stt_h stt, edge_stt_partial_cb callback, void *user);
 
 /**
  * @brief Turn a recording into text.
@@ -245,7 +250,7 @@ int32_t edge_stt_on_partial(edge_stt_h *stt, edge_stt_partial_cb callback, void 
  * @see edge_stt_transcript_free
  * @see edge_stt_cancel
  */
-int32_t edge_stt_transcribe(edge_stt_h *stt,
+int32_t edge_stt_transcribe(edge_stt_h stt,
                             const int16_t *samples,
                             uintptr_t count,
                             uint32_t sample_rate,
@@ -258,7 +263,7 @@ int32_t edge_stt_transcribe(edge_stt_h *stt,
  * @return 0, or a negative code. The transcribing call returns
  *         EDGE_STT_CANCELLED.
  */
-int32_t edge_stt_cancel(edge_stt_h *stt);
+int32_t edge_stt_cancel(edge_stt_h stt);
 
 /**
  * @brief The words that were said.

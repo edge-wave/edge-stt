@@ -22,7 +22,7 @@ int main(void) {
     CHECK(edge_stt_cancel(NULL) == EDGE_STT_NULL_ARGUMENT);
     edge_stt_free(NULL);
 
-    edge_stt_h *stt = edge_stt_new();
+    edge_stt_h stt = edge_stt_new();
     CHECK(stt != NULL);
 
     /* Transcribing before a model is loaded says exactly that. */
