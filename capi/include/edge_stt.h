@@ -123,10 +123,11 @@ typedef int32_t edge_stt_error;
 typedef struct edge_stt_handle edge_stt_handle;
 
 /**
- * What a C caller reads a transcript through. Owns its strings so the
- * caller never has to free one separately.
+ * What a transcript handle points to. Opaque on the C side, which
+ * only ever names the pointer to this: `edge_stt_transcript_h`. Owns
+ * its strings so the caller never has to free one separately.
  */
-typedef struct edge_stt_transcript edge_stt_transcript;
+typedef struct edge_stt_transcript_handle edge_stt_transcript_handle;
 
 /**
  * The handle a C caller holds.
@@ -165,6 +166,11 @@ typedef struct {
  * that call has returned.
  */
 typedef void (*edge_stt_partial_cb)(const edge_stt_partial *partial, void *user);
+
+/**
+ * The handle a C caller holds for one transcript.
+ */
+typedef edge_stt_transcript_handle *edge_stt_transcript_h;
 
 #ifdef __cplusplus
 extern "C" {
@@ -254,7 +260,7 @@ int32_t edge_stt_transcribe(edge_stt_h stt,
                             const int16_t *samples,
                             uintptr_t count,
                             uint32_t sample_rate,
-                            edge_stt_transcript **out);
+                            edge_stt_transcript_h *out);
 
 /**
  * @brief Stop a transcription that is running, from any thread.
@@ -271,7 +277,7 @@ int32_t edge_stt_cancel(edge_stt_h stt);
  * @param[in] transcript the transcript
  * @return The text, owned by the transcript, or NULL.
  */
-const char *edge_stt_transcript_text(const edge_stt_transcript *transcript);
+const char *edge_stt_transcript_get_text(edge_stt_transcript_h transcript);
 
 /**
  * @brief The language the model settled on.
@@ -279,7 +285,7 @@ const char *edge_stt_transcript_text(const edge_stt_transcript *transcript);
  * @param[in] transcript the transcript
  * @return The tag, owned by the transcript, or NULL.
  */
-const char *edge_stt_transcript_language(const edge_stt_transcript *transcript);
+const char *edge_stt_transcript_get_language(edge_stt_transcript_h transcript);
 
 /**
  * @brief How long the audio ran, in milliseconds.
@@ -287,7 +293,7 @@ const char *edge_stt_transcript_language(const edge_stt_transcript *transcript);
  * @param[in] transcript the transcript
  * @return The duration, or zero.
  */
-uint64_t edge_stt_transcript_audio_ms(const edge_stt_transcript *transcript);
+uint64_t edge_stt_transcript_get_audio_ms(edge_stt_transcript_h transcript);
 
 /**
  * @brief How long transcribing took, in milliseconds. With the audio
@@ -296,7 +302,7 @@ uint64_t edge_stt_transcript_audio_ms(const edge_stt_transcript *transcript);
  * @param[in] transcript the transcript
  * @return The time taken, or zero.
  */
-uint64_t edge_stt_transcript_processing_ms(const edge_stt_transcript *transcript);
+uint64_t edge_stt_transcript_get_processing_ms(edge_stt_transcript_h transcript);
 
 /**
  * @brief How sure the model is, between zero and one.
@@ -304,7 +310,7 @@ uint64_t edge_stt_transcript_processing_ms(const edge_stt_transcript *transcript
  * @param[in] transcript the transcript
  * @return The confidence, or zero.
  */
-float edge_stt_transcript_confidence(const edge_stt_transcript *transcript);
+float edge_stt_transcript_get_confidence(edge_stt_transcript_h transcript);
 
 /**
  * @brief How many timed segments the transcript holds.
@@ -312,53 +318,51 @@ float edge_stt_transcript_confidence(const edge_stt_transcript *transcript);
  * @param[in] transcript the transcript
  * @return The count, or zero.
  */
-uintptr_t edge_stt_transcript_segment_count(const edge_stt_transcript *transcript);
+uintptr_t edge_stt_transcript_get_segment_count(edge_stt_transcript_h transcript);
 
 /**
  * @brief One segment's words.
  *
  * @param[in] transcript the transcript
- * @param[in] index below edge_stt_transcript_segment_count
+ * @param[in] index below edge_stt_transcript_get_segment_count
  * @return The text, owned by the transcript, or NULL when out of range.
  */
-const char *edge_stt_transcript_segment_text(const edge_stt_transcript *transcript,
-                                             uintptr_t index);
+const char *edge_stt_transcript_get_segment_text(edge_stt_transcript_h transcript, uintptr_t index);
 
 /**
  * @brief Where one segment starts, in milliseconds from the start.
  *
  * @param[in] transcript the transcript
- * @param[in] index below edge_stt_transcript_segment_count
+ * @param[in] index below edge_stt_transcript_get_segment_count
  * @return The offset, or zero when out of range.
  */
-uint64_t edge_stt_transcript_segment_start_ms(const edge_stt_transcript *transcript,
-                                              uintptr_t index);
+uint64_t edge_stt_transcript_get_segment_start_ms(edge_stt_transcript_h transcript,
+                                                  uintptr_t index);
 
 /**
  * @brief Where one segment ends, in milliseconds from the start.
  *
  * @param[in] transcript the transcript
- * @param[in] index below edge_stt_transcript_segment_count
+ * @param[in] index below edge_stt_transcript_get_segment_count
  * @return The offset, or zero when out of range.
  */
-uint64_t edge_stt_transcript_segment_end_ms(const edge_stt_transcript *transcript, uintptr_t index);
+uint64_t edge_stt_transcript_get_segment_end_ms(edge_stt_transcript_h transcript, uintptr_t index);
 
 /**
  * @brief How sure the model is about one segment.
  *
  * @param[in] transcript the transcript
- * @param[in] index below edge_stt_transcript_segment_count
+ * @param[in] index below edge_stt_transcript_get_segment_count
  * @return Between zero and one, or zero when out of range.
  */
-float edge_stt_transcript_segment_confidence(const edge_stt_transcript *transcript,
-                                             uintptr_t index);
+float edge_stt_transcript_get_segment_confidence(edge_stt_transcript_h transcript, uintptr_t index);
 
 /**
  * @brief Release a transcript.
  *
  * @param[in] transcript the transcript, or NULL, which does nothing
  */
-void edge_stt_transcript_free(edge_stt_transcript *transcript);
+void edge_stt_transcript_free(edge_stt_transcript_h transcript);
 
 #ifdef __cplusplus
 }  // extern "C"

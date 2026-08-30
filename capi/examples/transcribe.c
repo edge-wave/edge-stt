@@ -50,15 +50,15 @@ int main(int argc, char **argv) {
 
     edge_stt_on_partial(stt, on_partial, NULL);
 
-    edge_stt_transcript *out = NULL;
+    edge_stt_transcript_h out = NULL;
     int code = edge_stt_transcribe(stt, samples, count, 16000, &out);
     if (code != 0) {
         fprintf(stderr, "\n%s\n", edge_stt_last_error());
     } else {
-        printf("\n%s\n", edge_stt_transcript_text(out));
+        printf("\n%s\n", edge_stt_transcript_get_text(out));
         printf("%llu ms of audio in %llu ms\n",
-               (unsigned long long)edge_stt_transcript_audio_ms(out),
-               (unsigned long long)edge_stt_transcript_processing_ms(out));
+               (unsigned long long)edge_stt_transcript_get_audio_ms(out),
+               (unsigned long long)edge_stt_transcript_get_processing_ms(out));
         edge_stt_transcript_free(out);
     }
 
