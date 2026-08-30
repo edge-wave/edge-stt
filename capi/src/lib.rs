@@ -80,7 +80,8 @@ pub extern "C" fn edge_stt_new() -> edge_stt_h {
 
 /// @brief Release the handle and everything it owns.
 ///
-/// @param stt The handle, or NULL, which does nothing.
+/// @param[in] stt the handle, or NULL, which does nothing
+/// @see edge_stt_new
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_free(stt: edge_stt_h) {
     if !stt.is_null() {
@@ -91,9 +92,9 @@ pub unsafe extern "C" fn edge_stt_free(stt: edge_stt_h) {
 /// @brief Set the language before loading a model, or leave it unset
 ///        to let the model decide.
 ///
-/// @param stt The handle.
-/// @param language A tag such as "ko", or NULL to detect.
-/// @return 0, or a negative code.
+/// @param[in] stt the handle
+/// @param[in] language a tag such as "ko", or NULL to detect
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_set_language(
     stt: edge_stt_h,
@@ -115,9 +116,9 @@ pub unsafe extern "C" fn edge_stt_set_language(
 
 /// @brief Give up on a transcription that takes longer than this.
 ///
-/// @param stt The handle.
-/// @param milliseconds The limit, or zero for none.
-/// @return 0, or a negative code.
+/// @param[in] stt the handle
+/// @param[in] milliseconds the limit, or zero for none
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_set_timeout(stt: edge_stt_h, milliseconds: u64) -> i32 {
     with!(stt, handle => {
@@ -130,10 +131,10 @@ pub unsafe extern "C" fn edge_stt_set_timeout(stt: edge_stt_h, milliseconds: u64
 /// @brief Load a model, which is when a missing or unusable file is
 ///        found out rather than on the first spoken word.
 ///
-/// @param stt The handle.
-/// @param path The ggml file. You supply it; nothing is downloaded.
-/// @return 0, or a negative code. edge_stt_last_error() says which
-///         path was searched.
+/// @param[in] stt the handle
+/// @param[in] path the ggml file. You supply it; nothing is downloaded
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+///         edge_stt_last_error() says which path was searched.
 /// @see edge_stt_new
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_load_model(stt: edge_stt_h, path: *const c_char) -> i32 {
@@ -164,11 +165,11 @@ pub unsafe extern "C" fn edge_stt_load_model(stt: edge_stt_h, path: *const c_cha
 
 /// @brief Ask to be told about words as they are decoded.
 ///
-/// @param stt The handle.
-/// @param callback Called on the transcribing thread, never after
-///        edge_stt_transcribe returns. NULL turns partials off.
-/// @param user Handed back to the callback untouched.
-/// @return 0, or a negative code.
+/// @param[in] stt the handle
+/// @param[in] callback called on the transcribing thread, never after
+///            edge_stt_transcribe returns. NULL turns partials off
+/// @param[in] user handed back to the callback untouched
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 /// @see edge_stt_transcribe
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_on_partial(
@@ -184,15 +185,15 @@ pub unsafe extern "C" fn edge_stt_on_partial(
 
 /// @brief Turn a recording into text.
 ///
-/// @param stt The handle, with a model loaded.
-/// @param samples 16000 Hz mono 16-bit samples. Borrowed for the call.
-/// @param count How many samples.
-/// @param sample_rate Must be 16000; anything else is refused.
-/// @param out Where the transcript is put. Free it with
-///        edge_stt_transcript_free.
-/// @return 0, or a negative code.
-/// @see edge_stt_transcript_free
-/// @see edge_stt_cancel
+/// @param[in] stt the handle, with a model loaded
+/// @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the
+///            call
+/// @param[in] count how many samples
+/// @param[in] sample_rate must be 16000; anything else is refused
+/// @param[out] out where the transcript is put. Free it with
+///             edge_stt_transcript_free
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+/// @see edge_stt_transcript_free, edge_stt_cancel
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcribe(
     stt: edge_stt_h,
@@ -247,9 +248,9 @@ pub unsafe extern "C" fn edge_stt_transcribe(
 
 /// @brief Stop a transcription that is running, from any thread.
 ///
-/// @param stt The handle.
-/// @return 0, or a negative code. The transcribing call returns
-///         EDGE_STT_CANCELLED.
+/// @param[in] stt the handle
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error. The
+///         transcribing call returns #EDGE_STT_CANCELLED.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_cancel(stt: edge_stt_h) -> i32 {
     with!(stt, handle => {
@@ -260,7 +261,7 @@ pub unsafe extern "C" fn edge_stt_cancel(stt: edge_stt_h) -> i32 {
 
 /// @brief The words that were said.
 ///
-/// @param transcript The transcript.
+/// @param[in] transcript the transcript
 /// @return The text, owned by the transcript, or NULL.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_text(
@@ -274,7 +275,7 @@ pub unsafe extern "C" fn edge_stt_transcript_text(
 
 /// @brief The language the model settled on.
 ///
-/// @param transcript The transcript.
+/// @param[in] transcript the transcript
 /// @return The tag, owned by the transcript, or NULL.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_language(
@@ -288,7 +289,7 @@ pub unsafe extern "C" fn edge_stt_transcript_language(
 
 /// @brief How long the audio ran, in milliseconds.
 ///
-/// @param transcript The transcript.
+/// @param[in] transcript the transcript
 /// @return The duration, or zero.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_audio_ms(
@@ -300,7 +301,7 @@ pub unsafe extern "C" fn edge_stt_transcript_audio_ms(
 /// @brief How long transcribing took, in milliseconds. With the audio
 ///        duration, this is whether the hardware is keeping up.
 ///
-/// @param transcript The transcript.
+/// @param[in] transcript the transcript
 /// @return The time taken, or zero.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_processing_ms(
@@ -311,7 +312,7 @@ pub unsafe extern "C" fn edge_stt_transcript_processing_ms(
 
 /// @brief How sure the model is, between zero and one.
 ///
-/// @param transcript The transcript.
+/// @param[in] transcript the transcript
 /// @return The confidence, or zero.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_confidence(
@@ -322,7 +323,7 @@ pub unsafe extern "C" fn edge_stt_transcript_confidence(
 
 /// @brief How many timed segments the transcript holds.
 ///
-/// @param transcript The transcript.
+/// @param[in] transcript the transcript
 /// @return The count, or zero.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_segment_count(
@@ -333,8 +334,8 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_count(
 
 /// @brief One segment's words.
 ///
-/// @param transcript The transcript.
-/// @param index Below edge_stt_transcript_segment_count.
+/// @param[in] transcript the transcript
+/// @param[in] index below edge_stt_transcript_segment_count
 /// @return The text, owned by the transcript, or NULL when out of range.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_segment_text(
@@ -349,8 +350,8 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_text(
 
 /// @brief Where one segment starts, in milliseconds from the start.
 ///
-/// @param transcript The transcript.
-/// @param index Below edge_stt_transcript_segment_count.
+/// @param[in] transcript the transcript
+/// @param[in] index below edge_stt_transcript_segment_count
 /// @return The offset, or zero when out of range.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_segment_start_ms(
@@ -364,8 +365,8 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_start_ms(
 
 /// @brief Where one segment ends, in milliseconds from the start.
 ///
-/// @param transcript The transcript.
-/// @param index Below edge_stt_transcript_segment_count.
+/// @param[in] transcript the transcript
+/// @param[in] index below edge_stt_transcript_segment_count
 /// @return The offset, or zero when out of range.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_segment_end_ms(
@@ -379,8 +380,8 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_end_ms(
 
 /// @brief How sure the model is about one segment.
 ///
-/// @param transcript The transcript.
-/// @param index Below edge_stt_transcript_segment_count.
+/// @param[in] transcript the transcript
+/// @param[in] index below edge_stt_transcript_segment_count
 /// @return Between zero and one, or zero when out of range.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_segment_confidence(
@@ -394,7 +395,7 @@ pub unsafe extern "C" fn edge_stt_transcript_segment_confidence(
 
 /// @brief Release a transcript.
 ///
-/// @param transcript The transcript, or NULL, which does nothing.
+/// @param[in] transcript the transcript, or NULL, which does nothing
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_transcript_free(transcript: *mut edge_stt_transcript) {
     if !transcript.is_null() {

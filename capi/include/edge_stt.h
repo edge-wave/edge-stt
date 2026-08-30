@@ -31,8 +31,8 @@
 #include <stdint.h>
 
 /**
- * @brief What went wrong. Zero is success; everything else is
- *        negative, one value for each failure the core reports.
+ * What went wrong. Zero is success; everything else is negative, one
+ * value for each failure the core reports.
  */
 enum edge_stt_error
 #if defined(__cplusplus) || __STDC_VERSION__ >= 202311L
@@ -190,7 +190,8 @@ edge_stt_h edge_stt_new(void);
 /**
  * @brief Release the handle and everything it owns.
  *
- * @param stt The handle, or NULL, which does nothing.
+ * @param[in] stt the handle, or NULL, which does nothing
+ * @see edge_stt_new
  */
 void edge_stt_free(edge_stt_h stt);
 
@@ -198,18 +199,18 @@ void edge_stt_free(edge_stt_h stt);
  * @brief Set the language before loading a model, or leave it unset
  *        to let the model decide.
  *
- * @param stt The handle.
- * @param language A tag such as "ko", or NULL to detect.
- * @return 0, or a negative code.
+ * @param[in] stt the handle
+ * @param[in] language a tag such as "ko", or NULL to detect
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
  */
 int32_t edge_stt_set_language(edge_stt_h stt, const char *language);
 
 /**
  * @brief Give up on a transcription that takes longer than this.
  *
- * @param stt The handle.
- * @param milliseconds The limit, or zero for none.
- * @return 0, or a negative code.
+ * @param[in] stt the handle
+ * @param[in] milliseconds the limit, or zero for none
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
  */
 int32_t edge_stt_set_timeout(edge_stt_h stt, uint64_t milliseconds);
 
@@ -217,10 +218,10 @@ int32_t edge_stt_set_timeout(edge_stt_h stt, uint64_t milliseconds);
  * @brief Load a model, which is when a missing or unusable file is
  *        found out rather than on the first spoken word.
  *
- * @param stt The handle.
- * @param path The ggml file. You supply it; nothing is downloaded.
- * @return 0, or a negative code. edge_stt_last_error() says which
- *         path was searched.
+ * @param[in] stt the handle
+ * @param[in] path the ggml file. You supply it; nothing is downloaded
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ *         edge_stt_last_error() says which path was searched.
  * @see edge_stt_new
  */
 int32_t edge_stt_load_model(edge_stt_h stt, const char *path);
@@ -228,11 +229,11 @@ int32_t edge_stt_load_model(edge_stt_h stt, const char *path);
 /**
  * @brief Ask to be told about words as they are decoded.
  *
- * @param stt The handle.
- * @param callback Called on the transcribing thread, never after
- *        edge_stt_transcribe returns. NULL turns partials off.
- * @param user Handed back to the callback untouched.
- * @return 0, or a negative code.
+ * @param[in] stt the handle
+ * @param[in] callback called on the transcribing thread, never after
+ *            edge_stt_transcribe returns. NULL turns partials off
+ * @param[in] user handed back to the callback untouched
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
  * @see edge_stt_transcribe
  */
 int32_t edge_stt_on_partial(edge_stt_h stt, edge_stt_partial_cb callback, void *user);
@@ -240,15 +241,15 @@ int32_t edge_stt_on_partial(edge_stt_h stt, edge_stt_partial_cb callback, void *
 /**
  * @brief Turn a recording into text.
  *
- * @param stt The handle, with a model loaded.
- * @param samples 16000 Hz mono 16-bit samples. Borrowed for the call.
- * @param count How many samples.
- * @param sample_rate Must be 16000; anything else is refused.
- * @param out Where the transcript is put. Free it with
- *        edge_stt_transcript_free.
- * @return 0, or a negative code.
- * @see edge_stt_transcript_free
- * @see edge_stt_cancel
+ * @param[in] stt the handle, with a model loaded
+ * @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the
+ *            call
+ * @param[in] count how many samples
+ * @param[in] sample_rate must be 16000; anything else is refused
+ * @param[out] out where the transcript is put. Free it with
+ *             edge_stt_transcript_free
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_transcript_free, edge_stt_cancel
  */
 int32_t edge_stt_transcribe(edge_stt_h stt,
                             const int16_t *samples,
@@ -259,16 +260,16 @@ int32_t edge_stt_transcribe(edge_stt_h stt,
 /**
  * @brief Stop a transcription that is running, from any thread.
  *
- * @param stt The handle.
- * @return 0, or a negative code. The transcribing call returns
- *         EDGE_STT_CANCELLED.
+ * @param[in] stt the handle
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error. The
+ *         transcribing call returns #EDGE_STT_CANCELLED.
  */
 int32_t edge_stt_cancel(edge_stt_h stt);
 
 /**
  * @brief The words that were said.
  *
- * @param transcript The transcript.
+ * @param[in] transcript the transcript
  * @return The text, owned by the transcript, or NULL.
  */
 const char *edge_stt_transcript_text(const edge_stt_transcript *transcript);
@@ -276,7 +277,7 @@ const char *edge_stt_transcript_text(const edge_stt_transcript *transcript);
 /**
  * @brief The language the model settled on.
  *
- * @param transcript The transcript.
+ * @param[in] transcript the transcript
  * @return The tag, owned by the transcript, or NULL.
  */
 const char *edge_stt_transcript_language(const edge_stt_transcript *transcript);
@@ -284,7 +285,7 @@ const char *edge_stt_transcript_language(const edge_stt_transcript *transcript);
 /**
  * @brief How long the audio ran, in milliseconds.
  *
- * @param transcript The transcript.
+ * @param[in] transcript the transcript
  * @return The duration, or zero.
  */
 uint64_t edge_stt_transcript_audio_ms(const edge_stt_transcript *transcript);
@@ -293,7 +294,7 @@ uint64_t edge_stt_transcript_audio_ms(const edge_stt_transcript *transcript);
  * @brief How long transcribing took, in milliseconds. With the audio
  *        duration, this is whether the hardware is keeping up.
  *
- * @param transcript The transcript.
+ * @param[in] transcript the transcript
  * @return The time taken, or zero.
  */
 uint64_t edge_stt_transcript_processing_ms(const edge_stt_transcript *transcript);
@@ -301,7 +302,7 @@ uint64_t edge_stt_transcript_processing_ms(const edge_stt_transcript *transcript
 /**
  * @brief How sure the model is, between zero and one.
  *
- * @param transcript The transcript.
+ * @param[in] transcript the transcript
  * @return The confidence, or zero.
  */
 float edge_stt_transcript_confidence(const edge_stt_transcript *transcript);
@@ -309,7 +310,7 @@ float edge_stt_transcript_confidence(const edge_stt_transcript *transcript);
 /**
  * @brief How many timed segments the transcript holds.
  *
- * @param transcript The transcript.
+ * @param[in] transcript the transcript
  * @return The count, or zero.
  */
 uintptr_t edge_stt_transcript_segment_count(const edge_stt_transcript *transcript);
@@ -317,8 +318,8 @@ uintptr_t edge_stt_transcript_segment_count(const edge_stt_transcript *transcrip
 /**
  * @brief One segment's words.
  *
- * @param transcript The transcript.
- * @param index Below edge_stt_transcript_segment_count.
+ * @param[in] transcript the transcript
+ * @param[in] index below edge_stt_transcript_segment_count
  * @return The text, owned by the transcript, or NULL when out of range.
  */
 const char *edge_stt_transcript_segment_text(const edge_stt_transcript *transcript,
@@ -327,8 +328,8 @@ const char *edge_stt_transcript_segment_text(const edge_stt_transcript *transcri
 /**
  * @brief Where one segment starts, in milliseconds from the start.
  *
- * @param transcript The transcript.
- * @param index Below edge_stt_transcript_segment_count.
+ * @param[in] transcript the transcript
+ * @param[in] index below edge_stt_transcript_segment_count
  * @return The offset, or zero when out of range.
  */
 uint64_t edge_stt_transcript_segment_start_ms(const edge_stt_transcript *transcript,
@@ -337,8 +338,8 @@ uint64_t edge_stt_transcript_segment_start_ms(const edge_stt_transcript *transcr
 /**
  * @brief Where one segment ends, in milliseconds from the start.
  *
- * @param transcript The transcript.
- * @param index Below edge_stt_transcript_segment_count.
+ * @param[in] transcript the transcript
+ * @param[in] index below edge_stt_transcript_segment_count
  * @return The offset, or zero when out of range.
  */
 uint64_t edge_stt_transcript_segment_end_ms(const edge_stt_transcript *transcript, uintptr_t index);
@@ -346,8 +347,8 @@ uint64_t edge_stt_transcript_segment_end_ms(const edge_stt_transcript *transcrip
 /**
  * @brief How sure the model is about one segment.
  *
- * @param transcript The transcript.
- * @param index Below edge_stt_transcript_segment_count.
+ * @param[in] transcript the transcript
+ * @param[in] index below edge_stt_transcript_segment_count
  * @return Between zero and one, or zero when out of range.
  */
 float edge_stt_transcript_segment_confidence(const edge_stt_transcript *transcript,
@@ -356,7 +357,7 @@ float edge_stt_transcript_segment_confidence(const edge_stt_transcript *transcri
 /**
  * @brief Release a transcript.
  *
- * @param transcript The transcript, or NULL, which does nothing.
+ * @param[in] transcript the transcript, or NULL, which does nothing
  */
 void edge_stt_transcript_free(edge_stt_transcript *transcript);
 
