@@ -86,8 +86,22 @@ alongside it. Which size to run is your decision — a small board and a
 large model is a choice this library will not refuse, and every
 transcript tells you what it cost.
 
-[docs/measurements.md](docs/measurements.md) has what makes Whisper
-slow and how to take the numbers on your own board. Read it first.
+```bash
+export EDGE_STT_MODEL_DIR=~/models/whisper
+scripts/fetch-model.sh --list
+scripts/fetch-model.sh base-q5_1
+```
+
+The file is checked against the SHA-256 in `THIRD-PARTY-LICENSES` and
+deleted if it does not match. Weights never enter this repository:
+`models/`, `*.bin`, `*.gguf`, and `*.ggml` are ignored anywhere in the
+tree, and a build fails if one is ever tracked.
+
+The device and the server do not run the same file.
+[docs/models.md](docs/models.md) says which belongs where, what an
+English-only model refuses, and where Korean runs into the model's own
+arithmetic. [docs/measurements.md](docs/measurements.md) has what makes
+Whisper slow and how to take the numbers on your own board.
 
 ## Building
 

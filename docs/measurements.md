@@ -27,9 +27,23 @@ whisper_backend_init_gpu: no GPU found
 whisper_backend_init: using BLAS backend
 ```
 
-Metal was not compiled in, even with the `metal` feature turned on.
-That is worth chasing on its own account, but it is not what produced
-the 109x above, and the two should not be confused.
+That was read as Metal failing to compile in. It is not. The `metal`
+feature builds and the library finds the GPU; what the line means is
+that nothing had asked for it. An accelerator is requested at
+construction, and a `ModelSpec` that does not name one asks for the
+processor — so a build carrying Metal decodes on the processor until
+told otherwise. Asked properly, the same build says:
+
+```
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Pro
+whisper_model_load:        Metal total size =    59.12 MB
+```
+
+`--accelerator` on the transcribe example is how you ask, and
+`probe_model MODEL metal` answers the question on its own, without
+decoding anything. Neither existed when the reading above was taken,
+which is why it was misread.
 
 **Measure on a quiet machine.** Check first:
 

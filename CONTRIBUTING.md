@@ -33,6 +33,17 @@ Nothing is referenced from the documentation without checking what it
 is licensed under and writing that down in `THIRD-PARTY-LICENSES`, with
 a checksum and where it came from.
 
+That record is read by a program, not only by people:
+`scripts/fetch-model.sh` will not download a model it does not name and
+will not keep one that hashes differently. So adding a model means
+adding its row first, and a test fails if `docs/models.md` names a model
+the record does not.
+
+```bash
+scripts/fetch-model.sh --list
+scripts/fetch-model.sh base-q5_1
+```
+
 Models fail quietly when fed the wrong shape. Print a model's real
 parameters before trusting them:
 
