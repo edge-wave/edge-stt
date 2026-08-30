@@ -125,8 +125,13 @@ build — whisper.cpp compiled for debugging is unusably slow:
 ```bash
 export EDGE_STT_MODEL_DIR=~/models/whisper
 export EDGE_STT_SAMPLE_WAV=speech.wav EDGE_STT_SAMPLE_TEXT="what is said in it"
+export EDGE_STT_SAMPLE_LANGUAGE=en EDGE_STT_ACCELERATOR=metal
 cargo test --release --workspace --features full -- --ignored
 ```
+
+Without `EDGE_STT_ACCELERATOR` they decode on the processor, which on a
+shared machine is slow enough to look like a hang. The build has to
+carry the accelerator you name.
 
 ## Python
 
