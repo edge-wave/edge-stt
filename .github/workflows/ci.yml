@@ -50,6 +50,38 @@ jobs:
                 sudo unshare --net "$binary" < /dev/null
               done
 
+  weights:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The operator supplies the weights. A tracked one means an ignore
+      # rule failed, so the machine looks rather than the reviewer.
+      - name: No model weights are tracked
+        run: |
+          tracked=$(git ls-files \
+            | grep -Ei '\.(bin|gguf|ggml|pt|pth|onnx|safetensors)$' || true)
+          if [ -n "$tracked" ]; then
+            echo "these look like model weights and are tracked:"
+            echo "$tracked"
+            exit 1
+          fi
+
+  models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The checksum record is what the fetch script trusts, so a row
+      # that stops parsing would silently stop being checked.
+      - name: The checksum record still reads
+        run: |
+          count=$(./scripts/fetch-model.sh --list | wc -l)
+          [ "$count" -gt 0 ] || { echo "no models parsed out of the record"; exit 1; }
+      # Whether the published file still hashes to what is written down.
+      # Advisory: Hugging Face being down is not this branch being broken.
+      - name: The smallest model still fetches and verifies
+        continue-on-error: true
+        run: ./scripts/fetch-model.sh --dir "$RUNNER_TEMP/models" tiny-q5_1
+
   header:
     runs-on: ubuntu-latest
     steps:
