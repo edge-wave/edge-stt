@@ -1,0 +1,87 @@
+//! The README's examples, compiled. If the API moves and the prose
+//! does not, this fails rather than the reader finding out.
+
+use std::path::PathBuf;
+
+fn readme() -> String {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.pop();
+    std::fs::read_to_string(path.join("README.md")).expect("a README at the repository root")
+}
+
+/// The transcribing example, verbatim. Compiling is the point; it is
+/// never run, because running it would need a model.
+#[allow(dead_code)]
+fn the_transcribing_example(samples: &[i16]) -> edge_stt_core::Result<()> {
+    use edge_stt_core::{Config, EdgeStt, ModelSpec, Utterance};
+
+    let stt = EdgeStt::new(Config::local(ModelSpec::at("models/ggml-base-q5_1.bin")))?;
+    let transcript = stt.transcribe(&Utterance::mono_16k(samples))?;
+    println!("{}", transcript.text);
+    Ok(())
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "remote")]
+fn the_remote_example() -> edge_stt_core::Result<()> {
+    use edge_stt_core::{Config, EdgeStt, RemoteConfig};
+
+    let _stt = EdgeStt::new(Config::remote(RemoteConfig::at(
+        "ws://host:8000/api/v1/transcribe",
+    )))?;
+    Ok(())
+}
+
+#[allow(dead_code)]
+fn the_partials_example(stt: &edge_stt_core::EdgeStt, utterance: &edge_stt_core::Utterance<'_>) {
+    use edge_stt_core::CancelToken;
+
+    let cancel = CancelToken::new();
+    let _ = stt.transcribe_with(utterance, |p| print!("{}", p.text), &cancel);
+}
+
+#[test]
+fn the_examples_above_are_the_ones_the_readme_shows() {
+    let readme = readme();
+    for line in [
+        "let stt = EdgeStt::new(Config::local(ModelSpec::at(\"models/ggml-base-q5_1.bin\")))?;",
+        "let transcript = stt.transcribe(&Utterance::mono_16k(&samples))?;",
+        "EdgeStt::new(Config::remote(RemoteConfig::at(\"ws://host:8000/api/v1/transcribe\")))?;",
+        "stt.transcribe_with(&utterance, |p| print!(\"{}\", p.text), &cancel)?;",
+    ] {
+        assert!(
+            readme.contains(line),
+            "the README no longer shows:\n  {line}"
+        );
+    }
+}
+
+#[test]
+fn the_readme_names_the_build_that_actually_works() {
+    let readme = readme();
+    assert!(
+        readme.contains("--features full"),
+        "the checking command must be the real one"
+    );
+    assert!(
+        !readme.contains("cargo test --workspace --all-features"),
+        "--all-features turns on accelerators most machines cannot build"
+    );
+    assert!(
+        readme.contains("cmake"),
+        "whisper.cpp needs CMake and the README must say so"
+    );
+}
+
+#[test]
+fn the_readme_promises_no_model_it_does_not_ship() {
+    let readme = readme();
+    assert!(
+        readme.contains("You do"),
+        "the model table must say who supplies the weights"
+    );
+    assert!(
+        readme.contains("Ship a model"),
+        "the list of what it does not do must say this"
+    );
+}
