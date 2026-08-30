@@ -8,7 +8,7 @@
  *         --output capi/include/edge_stt.h
  *
  * Errors: every fallible call returns int. 0 is success, negative names
- * the failure, and edge_stt_last_error() describes the most recent one
+ * the failure, and edge_stt_get_last_error() describes the most recent one
  * on this thread.
  *
  * Memory: the caller owns the samples it passes in. Anything the
@@ -182,7 +182,7 @@ extern "C" {
  * @return The message, borrowed until the next call on this thread
  *         fails. Empty when nothing has failed yet.
  */
-const char *edge_stt_last_error(void);
+const char *edge_stt_get_last_error(void);
 
 /**
  * @brief Make a handle. Load a model into it before transcribing.
@@ -226,7 +226,7 @@ int32_t edge_stt_set_timeout(edge_stt_h stt, uint64_t milliseconds);
  * @param[in] stt the handle
  * @param[in] path the ggml file. You supply it; nothing is downloaded
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
- *         edge_stt_last_error() says which path was searched.
+ *         edge_stt_get_last_error() says which path was searched.
  * @see edge_stt_new
  */
 int32_t edge_stt_load_model(edge_stt_h stt, const char *path);

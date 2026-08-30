@@ -25,12 +25,12 @@ int main(int argc, char **argv) {
 
     edge_stt_h stt = edge_stt_new();
     if (!stt) {
-        fprintf(stderr, "%s\n", edge_stt_last_error());
+        fprintf(stderr, "%s\n", edge_stt_get_last_error());
         return 1;
     }
 
     if (edge_stt_load_model(stt, argv[1]) != 0) {
-        fprintf(stderr, "%s\n", edge_stt_last_error());
+        fprintf(stderr, "%s\n", edge_stt_get_last_error());
         edge_stt_free(stt);
         return 1;
     }
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
     edge_stt_transcript_h out = NULL;
     int code = edge_stt_transcribe(stt, samples, count, 16000, &out);
     if (code != 0) {
-        fprintf(stderr, "\n%s\n", edge_stt_last_error());
+        fprintf(stderr, "\n%s\n", edge_stt_get_last_error());
     } else {
         printf("\n%s\n", edge_stt_transcript_get_text(out));
         printf("%llu ms of audio in %llu ms\n",
