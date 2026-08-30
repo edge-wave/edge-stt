@@ -247,9 +247,8 @@ impl WhisperBackend {
                 collect(&state)
             });
 
-            // Draining until the channel closes would wait forever:
-            // whisper.cpp owns the callback holding the sender, and
-            // does not give it back. The worker finishing is the end.
+            // whisper.cpp owns the callback holding the sender and
+            // never gives it back, so the worker ending is the end.
             let mut seq = 0u32;
             let mut hand_over = |work: &mut Work<'_>, data: SegmentCallbackData| {
                 // Filtered here as well as at the end, so joining the
