@@ -13,7 +13,6 @@ was said.
 - Turns a finished recording into text, using Whisper
 - Runs the model on the device, with no network at all
 - Or sends the audio to a server you started, chosen by configuration
-  and nothing else
 - Hands you the words as they are decoded, if you want them early
 - Reports what each transcript cost, so you can tell whether the
   hardware is keeping up
@@ -40,13 +39,41 @@ println!("{}", transcript.text);
 Nothing above reaches the network, and with default features there is
 no network code in the build to reach it with.
 
-To use a server instead, change the configuration and nothing else:
+A server instead — the configuration changes, the calling code does not:
 
 ```rust
 let stt = EdgeStt::new(Config::remote(RemoteConfig::at("ws://host:8000/api/v1/transcribe")))?;
 ```
 
 That needs the `remote` feature, which is off by default.
+
+To see the words as they are decoded, hand over a callback. That is the
+whole of asking for them, and it works the same on both backends:
+
+```rust
+let cancel = CancelToken::new();
+let transcript = stt.transcribe_with(&utterance, |p| print!("{}", p.text), &cancel)?;
+```
+
+`cancel` stops one from another thread; a time limit on the config does
+the same when it runs out. The two never arrive as the same error.
+
+## The server
+
+The other end of the remote backend, in this repository, running the
+same code the library runs:
+
+```bash
+cargo run -p edge-stt-server -- \
+  --model ~/models/whisper/ggml-base-q5_1.bin \
+  --bind 0.0.0.0:8000 \
+  --credential-file ~/.config/edge-stt/token
+```
+
+`/healthz` answers at once, `/readyz` only once the model has loaded,
+so a supervisor cannot kill a server that is working. The credential is
+checked on the handshake; without `--credential-file` the server
+refuses to start unless you say `--open-to-anyone` out loud.
 
 ## Models
 
@@ -57,8 +84,10 @@ That needs the `remote` feature, which is off by default.
 Whisper is MIT, and the GGML files whisper.cpp reads are published
 alongside it. Which size to run is your decision — a small board and a
 large model is a choice this library will not refuse, and every
-transcript tells you what it cost. See `docs/measurements.md` for
-figures on the machines we measured.
+transcript tells you what it cost.
+
+[docs/measurements.md](docs/measurements.md) has what makes Whisper
+slow and how to take the numbers on your own board. Read it first.
 
 ## Building
 
@@ -70,13 +99,19 @@ sudo apt install build-essential cmake pkg-config   # Linux
 xcode-select --install && brew install cmake        # macOS
 
 cargo build --workspace
-cargo test --workspace
+cargo test --workspace --features full
 ```
 
-Tests needing a real model file are marked ignored:
+`full` is whisper plus remote. Not `--all-features`: that turns on the
+CUDA and Vulkan accelerators, which need toolchains most machines lack.
+
+Tests needing a real model are ignored by default, and want a release
+build — whisper.cpp compiled for debugging is unusably slow:
 
 ```bash
-EDGE_STT_MODEL_DIR=~/models/whisper cargo test --workspace -- --ignored
+export EDGE_STT_MODEL_DIR=~/models/whisper
+export EDGE_STT_SAMPLE_WAV=speech.wav EDGE_STT_SAMPLE_TEXT="what is said in it"
+cargo test --release --workspace --features full -- --ignored
 ```
 
 ## Python
@@ -89,8 +124,12 @@ cd py && maturin develop
 from edge_stt import EdgeStt
 
 with EdgeStt(model="models/ggml-base-q5_1.bin") as stt:
-    print(stt.transcribe(samples, sample_rate=16000).text)
+    print(stt.transcribe(samples).text)
 ```
+
+`samples` may be bytes, a list of ints, or a numpy `int16` array. Each
+failure has its own exception class under `EdgeSttError`, so
+`except NetworkError` works without reading a message.
 
 ## C
 
