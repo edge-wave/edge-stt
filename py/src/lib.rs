@@ -220,6 +220,60 @@ impl PartialStream {
     }
 }
 
+/// A caller-fed, open-ended audio stream. `EdgeStt.open_session`
+/// returns one; where `transcribe`/`transcribe_stream` take a whole
+/// recording, this takes samples as they arrive and decides for
+/// itself where one utterance ends.
+#[pyclass(name = "Session")]
+pub struct PySession {
+    /// Keeps the model alive for as long as the session is open --
+    /// `session` unsafely borrows through this Arc's stable address.
+    _core: Arc<Core>,
+    session: Mutex<edge_stt_core::AudioSession<'static>>,
+}
+
+#[pymethods]
+impl PySession {
+    /// Feeds one piece of newly-captured audio. Returns the finished
+    /// utterance the moment one is detected, otherwise `None`.
+    #[pyo3(signature = (samples, sample_rate = 16_000))]
+    fn push(
+        &self,
+        py: Python<'_>,
+        samples: &Bound<'_, PyAny>,
+        sample_rate: u32,
+    ) -> PyResult<Option<PyTranscript>> {
+        let audio = read_samples(samples, sample_rate)?;
+        py.detach(|| {
+            let mut session = self.session.lock().expect("a lock nobody poisons");
+            session.push(&audio, None)
+        })
+        .map(|found| found.as_ref().map(to_python))
+        .map_err(to_py)
+    }
+
+    /// Finalizes and returns whatever utterance was in progress. A
+    /// second call returns `None` rather than raising.
+    fn close(&self, py: Python<'_>) -> PyResult<Option<PyTranscript>> {
+        py.detach(|| {
+            let mut session = self.session.lock().expect("a lock nobody poisons");
+            session.close()
+        })
+        .map(|found| found.as_ref().map(to_python))
+        .map_err(to_py)
+    }
+
+    fn __enter__(this: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        this
+    }
+
+    #[pyo3(signature = (*_args))]
+    fn __exit__(&self, py: Python<'_>, _args: &Bound<'_, PyAny>) -> PyResult<bool> {
+        self.close(py)?;
+        Ok(false)
+    }
+}
+
 #[pyclass(name = "EdgeStt")]
 pub struct PyEdgeStt {
     core: Arc<Core>,
@@ -299,6 +353,25 @@ impl PyEdgeStt {
         })
     }
 
+    /// Opens a continuous session against a second, separate VAD
+    /// model file -- push samples to it as they arrive.
+    #[pyo3(signature = (vad_model, pause_tolerance = None))]
+    fn open_session(&self, vad_model: &str, pause_tolerance: Option<f64>) -> PyResult<PySession> {
+        let mut config = edge_stt_core::EndpointConfig::new(vad_model);
+        if let Some(seconds) = pause_tolerance {
+            config = config.with_pause_tolerance(Duration::from_secs_f64(seconds));
+        }
+        // SAFETY: `_core` below is a clone of `self.core`, keeping the
+        // `EdgeStt` this borrows from alive for as long as the session
+        // exists -- the Arc's address does not move once allocated.
+        let core: &'static Core = unsafe { &*Arc::as_ptr(&self.core) };
+        let session = core.open_session(config).map_err(to_py)?;
+        Ok(PySession {
+            _core: Arc::clone(&self.core),
+            session: Mutex::new(session),
+        })
+    }
+
     fn __enter__(this: PyRef<'_, Self>) -> PyRef<'_, Self> {
         this
     }
@@ -355,6 +428,7 @@ fn edge_stt(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Segment>()?;
     module.add_class::<PyPartial>()?;
     module.add_class::<PartialStream>()?;
+    module.add_class::<PySession>()?;
     for (name, class) in [
         ("EdgeSttError", module.py().get_type::<EdgeSttError>()),
         (

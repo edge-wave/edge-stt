@@ -60,6 +60,16 @@ int main(void) {
     CHECK(edge_stt_transcript_get_audio_ms(NULL) == 0);
     edge_stt_transcript_free(NULL);
 
+    /* A null session handle is an error, never a crash. */
+    CHECK(edge_stt_session_push(NULL, samples, 16000) == EDGE_STT_NULL_ARGUMENT);
+    CHECK(edge_stt_session_close(NULL) == EDGE_STT_NULL_ARGUMENT);
+    CHECK(edge_stt_on_transcript(NULL, NULL, NULL) == EDGE_STT_NULL_ARGUMENT);
+    edge_stt_session_free(NULL);
+
+    /* Opening a session before a model is loaded says exactly that. */
+    CHECK(edge_stt_session_new(stt, "/no/such/vad.bin", 0) == NULL);
+    CHECK(strlen(edge_stt_get_last_error()) > 0);
+
     edge_stt_free(stt);
     printf("the C surface holds\n");
     return 0;

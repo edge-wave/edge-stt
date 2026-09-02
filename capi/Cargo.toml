@@ -13,4 +13,4 @@ authors.workspace = true
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
-edge-stt-core.workspace = true
+edge-stt-core = { workspace = true, features = ["streaming"] }
