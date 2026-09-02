@@ -1,6 +1,6 @@
 //! A client streaming audio to the server, without pre-marking
 //! boundaries, gets back the same transcript the on-device path
-//! already proved for the same recording (SC-001, SC-004).
+//! already proved for the same recording.
 
 mod support;
 

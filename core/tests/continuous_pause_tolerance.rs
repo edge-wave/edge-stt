@@ -1,6 +1,6 @@
 //! An integrator can move the boundary earlier or later by
 //! configuring `pause_tolerance`, instead of being stuck with one
-//! system-wide default (FR-006, User Story 3).
+//! system-wide default.
 
 #![cfg(feature = "streaming")]
 

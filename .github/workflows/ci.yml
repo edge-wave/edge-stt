@@ -29,6 +29,20 @@ jobs:
       - run: cargo clippy --workspace --all-targets --features full -- -D warnings
       - run: cargo test --workspace --features full
 
+  streaming:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # Isolated from `remote`: `full` already covers them combined,
+      # this catches anything that only breaks with streaming alone.
+      - run: cargo clippy -p edge-stt-core --all-targets --features streaming -- -D warnings
+      - run: cargo test -p edge-stt-core --features streaming
+
   offline:
     runs-on: ubuntu-latest
     steps:

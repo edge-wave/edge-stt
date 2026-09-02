@@ -1,7 +1,7 @@
 //! A brief non-speech sound inside otherwise-continuous speech must
 //! not split the utterance in two, so long as it stays under the
 //! configured pause tolerance -- but a pause that exceeds it does
-//! split (FR-008, SC-003).
+//! split.
 
 #![cfg(feature = "streaming")]
 

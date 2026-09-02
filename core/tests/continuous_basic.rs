@@ -1,7 +1,7 @@
 //! Feeding a recording in small, live-sized pieces produces the same
 //! transcript a caller who cut it by hand would have gotten, and
 //! feeding two sentences with a clear pause between them produces two
-//! transcripts, not one merged incorrectly (SC-001).
+//! transcripts, not one merged incorrectly.
 
 #![cfg(feature = "streaming")]
 

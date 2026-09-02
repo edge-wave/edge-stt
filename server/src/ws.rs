@@ -273,8 +273,8 @@ async fn run_continuous(
         return;
     };
 
-    // Held for the whole session, same as FR-014 asks: a continuous
-    // session counts as one client, not a per-utterance cost.
+    // Held for the whole session: it counts as one client, not a
+    // per-utterance cost.
     let permit = match server.capacity.admit().await {
         Admission::Started(permit) => {
             let accepted = ServerMessage::Accepted {
