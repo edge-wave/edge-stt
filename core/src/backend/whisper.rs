@@ -94,7 +94,7 @@ impl WhisperBackend {
 }
 
 impl Backend for WhisperBackend {
-    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_>) -> Result<Transcript> {
+    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_, '_>) -> Result<Transcript> {
         let started = Instant::now();
         if work.cancel.is_cancelled() {
             return Err(Error::Cancelled);
@@ -186,7 +186,7 @@ impl WhisperBackend {
     fn decode(
         &self,
         audio: &[f32],
-        work: &mut Work<'_>,
+        work: &mut Work<'_, '_>,
         timed_out: Arc<AtomicBool>,
         started: Instant,
     ) -> Result<Decoded> {
@@ -250,7 +250,7 @@ impl WhisperBackend {
             // whisper.cpp owns the callback holding the sender and
             // never gives it back, so the worker ending is the end.
             let mut seq = 0u32;
-            let mut hand_over = |work: &mut Work<'_>, data: SegmentCallbackData| {
+            let mut hand_over = |work: &mut Work<'_, '_>, data: SegmentCallbackData| {
                 // Filtered here as well as at the end, so joining the
                 // partials still gives the final text exactly.
                 if !is_annotation(&data.text) {

@@ -1,17 +1,20 @@
 //! Read a wav, print what was said, and say what it cost.
 //!
 //! usage: transcribe [--partials] [--bench] [--language ko]
-//!                   [--accelerator metal] [--threads 4] <model> <wav>...
+//!                   [--accelerator metal] [--threads 4]
+//!                   [--continuous --vad-model <path>] <model> <wav>...
 
 use std::process::ExitCode;
 use std::time::Instant;
 
 use edge_stt_core::{
-    Accelerator, CancelToken, Config, EdgeStt, Language, ModelSpec, Transcript, Utterance,
+    Accelerator, CancelToken, Config, EdgeStt, EndpointConfig, Language, ModelSpec, Transcript,
+    Utterance,
 };
 
 const USAGE: &str = "usage: transcribe [--partials] [--bench] [--language ko] \
-                     [--accelerator cpu|metal|cuda|vulkan] [--threads N] <model> <wav>...";
+                     [--accelerator cpu|metal|cuda|vulkan] [--threads N] \
+                     [--continuous --vad-model <path>] <model> <wav>...";
 
 struct Args {
     partials: bool,
@@ -19,6 +22,8 @@ struct Args {
     language: Option<String>,
     accelerator: Option<String>,
     threads: Option<u16>,
+    continuous: bool,
+    vad_model: Option<String>,
     model: String,
     wavs: Vec<String>,
 }
@@ -74,6 +79,27 @@ fn main() -> ExitCode {
         println!("model loaded in {:.2?}", loading.elapsed());
     }
 
+    if args.continuous {
+        let Some(vad_model) = &args.vad_model else {
+            eprintln!("--continuous needs --vad-model <path>");
+            return ExitCode::FAILURE;
+        };
+        for wav in &args.wavs {
+            let samples = match read_wav(wav) {
+                Ok(samples) => samples,
+                Err(why) => {
+                    eprintln!("{wav}: {why}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            if let Err(why) = run_continuous(&stt, &samples, EndpointConfig::new(vad_model)) {
+                eprintln!("{wav}: {why}");
+                return ExitCode::FAILURE;
+            }
+        }
+        return ExitCode::SUCCESS;
+    }
+
     for wav in &args.wavs {
         let samples = match read_wav(wav) {
             Ok(samples) => samples,
@@ -91,6 +117,27 @@ fn main() -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// Feeds the recording through `AudioSession` in small pieces, the
+/// way it would arrive from a live source, and prints one line per
+/// utterance the endpointer -- not the caller -- decides has ended.
+fn run_continuous(
+    stt: &EdgeStt,
+    samples: &[i16],
+    config: EndpointConfig,
+) -> edge_stt_core::Result<()> {
+    const SIMULATED_CHUNK: usize = 1_600; // 100ms of 16kHz audio per push
+    let mut session = stt.open_session(config)?;
+    for chunk in samples.chunks(SIMULATED_CHUNK) {
+        if let Some(transcript) = session.push(chunk, None)? {
+            println!("{}", transcript.text);
+        }
+    }
+    if let Some(transcript) = session.close()? {
+        println!("{}", transcript.text);
+    }
+    Ok(())
 }
 
 fn run(stt: &EdgeStt, samples: &[i16], args: &Args) -> edge_stt_core::Result<Transcript> {
@@ -172,6 +219,8 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
         language: None,
         accelerator: None,
         threads: None,
+        continuous: false,
+        vad_model: None,
         model: String::new(),
         wavs: vec![],
     };
@@ -183,6 +232,8 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
             "--language" => parsed.language = Some(args.next()?),
             "--accelerator" => parsed.accelerator = Some(args.next()?),
             "--threads" => parsed.threads = Some(args.next()?.parse().ok()?),
+            "--continuous" => parsed.continuous = true,
+            "--vad-model" => parsed.vad_model = Some(args.next()?),
             other => positional.push(other.to_string()),
         }
     }

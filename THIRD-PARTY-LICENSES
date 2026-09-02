@@ -45,11 +45,10 @@ above. The GGML conversion is published by `ggml-org` (whisper.cpp's own maintai
 `ggml-silero-v5.1.2.bin` in the `whisper-vad` repository on Hugging Face; the original Silero VAD
 model is MIT-licensed by the Silero Team (`snakers4/silero-vad`).
 
-Its checksum is not recorded here yet: unlike the Whisper ladder, nothing in this repository
-downloads or verifies this file automatically today, so a checksum written down before the file
-is actually fetched and hashed would be an unverified figure presented as a real one. Record it,
-in this same form (file name, origin, SHA-256), the first time something in this project actually
-fetches and checks the file — not before.
+Fetched and hashed directly (`https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin`)
+while validating User Story 1, since nothing in this repository automates it yet:
+
+`ggml-silero-v5.1.2.bin` SHA-256 `29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf`
 
 ## Rust dependencies
 

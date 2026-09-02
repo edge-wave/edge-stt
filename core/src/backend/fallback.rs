@@ -18,7 +18,7 @@ impl FallbackBackend {
 }
 
 impl Backend for FallbackBackend {
-    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_>) -> Result<Transcript> {
+    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_, '_>) -> Result<Transcript> {
         match self.primary.transcribe(utterance, work) {
             Ok(transcript) => Ok(transcript),
             Err(why) if worth_retrying_here(&why) && work.nothing_delivered_yet() => {
