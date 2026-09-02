@@ -36,6 +36,21 @@ from the published file stops the download rather than being believed.
 | `ggml-base.bin` | whisper.cpp model repository on Hugging Face | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
 | `ggml-small.bin` | whisper.cpp model repository on Hugging Face | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
 
+### Silero VAD, GGML conversion (ggml-org)
+
+The `streaming` feature's utterance-boundary detection runs Silero VAD through whisper.cpp's own
+built-in support — a second, separate model file the operator supplies, not shipped in this
+repository and not fetched by `scripts/fetch-model.sh`, which only knows the Whisper ladder
+above. The GGML conversion is published by `ggml-org` (whisper.cpp's own maintainers) as
+`ggml-silero-v5.1.2.bin` in the `whisper-vad` repository on Hugging Face; the original Silero VAD
+model is MIT-licensed by the Silero Team (`snakers4/silero-vad`).
+
+Its checksum is not recorded here yet: unlike the Whisper ladder, nothing in this repository
+downloads or verifies this file automatically today, so a checksum written down before the file
+is actually fetched and hashed would be an unverified figure presented as a real one. Record it,
+in this same form (file name, origin, SHA-256), the first time something in this project actually
+fetches and checks the file — not before.
+
 ## Rust dependencies
 
 Recorded by Cargo, not restated here. `cargo tree` and `cargo license`

@@ -80,11 +80,17 @@ refuses to start unless you say `--open-to-anyone` out loud.
 | What | Who supplies it |
 |------|-----------------|
 | Whisper weights | You do |
+| VAD weights (`streaming` feature only) | You do — a second, separate file |
 
 Whisper is MIT, and the GGML files whisper.cpp reads are published
 alongside it. Which size to run is your decision — a small board and a
 large model is a choice this library will not refuse, and every
 transcript tells you what it cost.
+
+Continuous audio input (the `streaming` feature) needs a second model: a Silero VAD converted to
+GGML and published by whisper.cpp's own maintainers at `ggml-org/whisper-vad` on Hugging Face.
+It decides where one utterance ends and the next begins, and it is not the Whisper file above —
+neither is bundled in this repository.
 
 ```bash
 export EDGE_STT_MODEL_DIR=~/models/whisper

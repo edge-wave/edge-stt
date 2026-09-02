@@ -18,7 +18,7 @@ default = ["whisper"]
 whisper = ["dep:whisper-rs"]
 # Everything that builds anywhere. The accelerators below need their
 # own toolchains, so --all-features is not the check to run.
-full = ["whisper", "remote"]
+full = ["whisper", "remote", "streaming"]
 # Accelerators. Asking for one the build does not carry is an error at
 # construction, never a quiet fall back to the processor.
 metal = ["whisper", "whisper-rs/metal"]
@@ -34,6 +34,11 @@ remote = [
     "dep:serde_json",
     "dep:uuid",
 ]
+# Continuous audio input with self-contained utterance-boundary
+# detection, built on whisper.cpp's own VAD support -- no extra crate,
+# just more of whisper-rs. Off by default: it is a second model file
+# and a second entry point most embedders never asked for.
+streaming = ["whisper"]
 
 [dependencies]
 log.workspace = true

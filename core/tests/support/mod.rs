@@ -52,6 +52,15 @@ pub fn model_spec() -> ModelSpec {
     spec.with_accelerator(accelerator)
 }
 
+/// Where the operator put their GGML Silero VAD file -- a second,
+/// separate model from the Whisper one, so a second variable.
+#[cfg(feature = "streaming")]
+pub fn vad_model_path() -> PathBuf {
+    std::env::var("EDGE_STT_VAD_MODEL")
+        .map(PathBuf::from)
+        .expect("set EDGE_STT_VAD_MODEL to a ggml Silero VAD file")
+}
+
 /// A recording of known speech, and the words in it.
 pub fn spoken_sample() -> (Vec<i16>, String) {
     let path = std::env::var("EDGE_STT_SAMPLE_WAV")
