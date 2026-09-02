@@ -9,15 +9,19 @@ use edge_stt_core::{EdgeStt, EndpointConfig, Partial, Transcript};
 
 use crate::convert::{edge_stt_transcript_h, edge_stt_transcript_handle, required_str};
 use crate::error::*;
-use crate::partials::deliver;
-use crate::{core_guard, edge_stt_h, lock, settings};
+use crate::partials::{deliver, edge_stt_partial_cb};
+use crate::{core_guard, edge_stt_h, lock};
 
 /// What a handle points to. Opaque on the C side, which only ever
 /// names the pointer to this: `edge_stt_session_h`.
+///
+/// Its own partial and transcript callbacks -- not the parent
+/// `edge_stt_h`'s -- so a one-shot edge_stt_transcribe running
+/// against the same handle never shares a sink with this session.
 #[allow(non_camel_case_types)]
 pub struct edge_stt_session_handle {
-    parent: edge_stt_h,
     session: Mutex<edge_stt_core::AudioSession<'static>>,
+    partial: Mutex<(edge_stt_partial_cb, usize)>,
     transcript: Mutex<(edge_stt_transcript_cb, usize)>,
 }
 
@@ -103,8 +107,8 @@ pub unsafe extern "C" fn edge_stt_session_new(
 
     match core.open_session(config) {
         Ok(session) => Box::into_raw(Box::new(edge_stt_session_handle {
-            parent: stt,
             session: Mutex::new(session),
+            partial: Mutex::new((None, 0)),
             transcript: Mutex::new((None, 0)),
         })),
         Err(why) => {
@@ -112,6 +116,32 @@ pub unsafe extern "C" fn edge_stt_session_new(
             std::ptr::null_mut()
         }
     }
+}
+
+/// @brief Ask to be told about words as they are decoded, for this
+///        session specifically.
+///
+/// Independent of edge_stt_set_partial_cb on the parent handle: a
+/// one-shot edge_stt_transcribe using that one, run alongside this
+/// session, delivers to its own sink instead of this one.
+///
+/// @param[in] session the handle
+/// @param[in] callback called on the thread that called
+///            edge_stt_session_push, never after that call has
+///            returned. NULL turns partials off
+/// @param[in] user handed back to the callback untouched
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+/// @see edge_stt_session_push
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn edge_stt_session_set_partial_cb(
+    session: edge_stt_session_h,
+    callback: edge_stt_partial_cb,
+    user: *mut c_void,
+) -> i32 {
+    with_session!(session, handle => {
+        *lock(&handle.partial) = (callback, user as usize);
+        ok()
+    })
 }
 
 /// @brief Ask to be told when the endpointer finishes an utterance.
@@ -124,7 +154,7 @@ pub unsafe extern "C" fn edge_stt_session_new(
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 /// @see edge_stt_session_push, edge_stt_session_close
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_set_transcript_cb(
+pub unsafe extern "C" fn edge_stt_session_set_transcript_cb(
     session: edge_stt_session_h,
     callback: edge_stt_transcript_cb,
     user: *mut c_void,
@@ -139,13 +169,13 @@ pub unsafe extern "C" fn edge_stt_set_transcript_cb(
 ///
 /// Delivers nothing to the caller directly: an utterance, when the
 /// endpointer finishes one, arrives through the callback set with
-/// edge_stt_set_transcript_cb instead.
+/// edge_stt_session_set_transcript_cb instead.
 ///
 /// @param[in] session the handle
 /// @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the call
 /// @param[in] count how many samples
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
-/// @see edge_stt_set_transcript_cb, edge_stt_session_close
+/// @see edge_stt_session_set_partial_cb, edge_stt_session_set_transcript_cb, edge_stt_session_close
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_session_push(
     session: edge_stt_session_h,
@@ -160,8 +190,7 @@ pub unsafe extern "C" fn edge_stt_session_push(
             );
         }
         let audio = unsafe { std::slice::from_raw_parts(samples, count) };
-        let parent = unsafe { &*handle.parent };
-        let (partial_cb, partial_user) = settings(parent).partial;
+        let (partial_cb, partial_user) = *lock(&handle.partial);
 
         let mut sink = |p: Partial| deliver(partial_cb, partial_user, &p);
         let on_partial: Option<&mut dyn FnMut(Partial)> = if partial_cb.is_some() {
@@ -186,7 +215,7 @@ pub unsafe extern "C" fn edge_stt_session_push(
 ///
 /// @param[in] session the handle
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
-/// @see edge_stt_set_transcript_cb, edge_stt_session_free
+/// @see edge_stt_session_set_transcript_cb, edge_stt_session_free
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_session_close(session: edge_stt_session_h) -> i32 {
     with_session!(session, handle => {
