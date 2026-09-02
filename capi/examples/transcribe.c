@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     size_t count = fread(samples, sizeof(int16_t), (size_t)bytes / sizeof(int16_t), audio);
     fclose(audio);
 
-    edge_stt_on_partial(stt, on_partial, NULL);
+    edge_stt_set_partial_cb(stt, on_partial, NULL);
 
     edge_stt_transcript_h out = NULL;
     int code = edge_stt_transcribe(stt, samples, count, 16000, &out);

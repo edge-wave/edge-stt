@@ -258,7 +258,7 @@ int32_t edge_stt_load_model(edge_stt_h stt, const char *path);
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
  * @see edge_stt_transcribe
  */
-int32_t edge_stt_on_partial(edge_stt_h stt, edge_stt_partial_cb callback, void *user);
+int32_t edge_stt_set_partial_cb(edge_stt_h stt, edge_stt_partial_cb callback, void *user);
 
 /**
  * @brief Turn a recording into text.
@@ -414,22 +414,22 @@ edge_stt_session_h edge_stt_session_new(edge_stt_h stt,
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
  * @see edge_stt_session_push, edge_stt_session_close
  */
-int32_t edge_stt_on_transcript(edge_stt_session_h session,
-                               edge_stt_transcript_cb callback,
-                               void *user);
+int32_t edge_stt_set_transcript_cb(edge_stt_session_h session,
+                                   edge_stt_transcript_cb callback,
+                                   void *user);
 
 /**
  * @brief Feed one piece of newly-captured audio.
  *
  * Delivers nothing to the caller directly: an utterance, when the
  * endpointer finishes one, arrives through the callback set with
- * edge_stt_on_transcript instead.
+ * edge_stt_set_transcript_cb instead.
  *
  * @param[in] session the handle
  * @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the call
  * @param[in] count how many samples
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
- * @see edge_stt_on_transcript, edge_stt_session_close
+ * @see edge_stt_set_transcript_cb, edge_stt_session_close
  */
 int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples, uintptr_t count);
 
@@ -439,7 +439,7 @@ int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples
  *
  * @param[in] session the handle
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
- * @see edge_stt_on_transcript, edge_stt_session_free
+ * @see edge_stt_set_transcript_cb, edge_stt_session_free
  */
 int32_t edge_stt_session_close(edge_stt_session_h session);
 

@@ -47,7 +47,7 @@ int main(void) {
     CHECK(edge_stt_set_language(stt, "ko") == EDGE_STT_OK);
     CHECK(edge_stt_set_language(stt, NULL) == EDGE_STT_OK);
     CHECK(edge_stt_set_timeout(stt, 5000) == EDGE_STT_OK);
-    CHECK(edge_stt_on_partial(stt, NULL, NULL) == EDGE_STT_OK);
+    CHECK(edge_stt_set_partial_cb(stt, NULL, NULL) == EDGE_STT_OK);
 
     /* Cancelling is safe whether or not anything is running. */
     CHECK(edge_stt_cancel(stt) == EDGE_STT_OK);
@@ -63,7 +63,7 @@ int main(void) {
     /* A null session handle is an error, never a crash. */
     CHECK(edge_stt_session_push(NULL, samples, 16000) == EDGE_STT_NULL_ARGUMENT);
     CHECK(edge_stt_session_close(NULL) == EDGE_STT_NULL_ARGUMENT);
-    CHECK(edge_stt_on_transcript(NULL, NULL, NULL) == EDGE_STT_NULL_ARGUMENT);
+    CHECK(edge_stt_set_transcript_cb(NULL, NULL, NULL) == EDGE_STT_NULL_ARGUMENT);
     edge_stt_session_free(NULL);
 
     /* Opening a session before a model is loaded says exactly that. */
