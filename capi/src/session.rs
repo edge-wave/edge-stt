@@ -124,7 +124,7 @@ pub unsafe extern "C" fn edge_stt_session_new(
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 /// @see edge_stt_session_push, edge_stt_session_close
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_on_transcript(
+pub unsafe extern "C" fn edge_stt_set_transcript_cb(
     session: edge_stt_session_h,
     callback: edge_stt_transcript_cb,
     user: *mut c_void,
@@ -139,13 +139,13 @@ pub unsafe extern "C" fn edge_stt_on_transcript(
 ///
 /// Delivers nothing to the caller directly: an utterance, when the
 /// endpointer finishes one, arrives through the callback set with
-/// edge_stt_on_transcript instead.
+/// edge_stt_set_transcript_cb instead.
 ///
 /// @param[in] session the handle
 /// @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the call
 /// @param[in] count how many samples
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
-/// @see edge_stt_on_transcript, edge_stt_session_close
+/// @see edge_stt_set_transcript_cb, edge_stt_session_close
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_session_push(
     session: edge_stt_session_h,
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn edge_stt_session_push(
 ///
 /// @param[in] session the handle
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
-/// @see edge_stt_on_transcript, edge_stt_session_free
+/// @see edge_stt_set_transcript_cb, edge_stt_session_free
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_session_close(session: edge_stt_session_h) -> i32 {
     with_session!(session, handle => {

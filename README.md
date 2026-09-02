@@ -213,7 +213,7 @@ Continuous input is a second handle, opened from the first:
 
 ```c
 edge_stt_session_h session = edge_stt_session_new(stt, "models/ggml-silero-v5.1.2.bin", 0);
-edge_stt_on_transcript(session, on_transcript, NULL);
+edge_stt_set_transcript_cb(session, on_transcript, NULL);
 edge_stt_session_push(session, samples, count);
 /* ...more pushes as audio arrives... */
 edge_stt_session_close(session);

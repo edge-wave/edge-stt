@@ -174,7 +174,7 @@ pub unsafe extern "C" fn edge_stt_load_model(stt: edge_stt_h, path: *const c_cha
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
 /// @see edge_stt_transcribe
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn edge_stt_on_partial(
+pub unsafe extern "C" fn edge_stt_set_partial_cb(
     stt: edge_stt_h,
     callback: edge_stt_partial_cb,
     user: *mut c_void,
