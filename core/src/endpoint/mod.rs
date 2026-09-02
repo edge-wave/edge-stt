@@ -50,14 +50,12 @@ impl EndpointConfig {
 /// audio. `whisper_vad::WhisperVad` is the only implementation today;
 /// the trait exists so `AudioSession` does not depend on it directly.
 pub trait Endpointer: Send {
-    /// Feed newly-arrived samples. Returns the finished utterance's
-    /// samples the moment enough trailing silence has been seen --
-    /// never later than that, and never audio this call was not given.
+    /// Returns the finished utterance's samples once enough trailing
+    /// silence has been seen, never later than that.
     fn push(&mut self, samples: &[i16]) -> Result<Option<Vec<i16>>>;
 
-    /// Whatever is buffered and not yet reported as finished, taken
-    /// for a clean close (FR-013). Leaves the endpointer with nothing
-    /// buffered, not ready to be reused for a second utterance.
+    /// Whatever is buffered, taken for a clean close. Leaves nothing
+    /// buffered -- not ready to be reused for a second utterance.
     fn take_remainder(&mut self) -> Option<Vec<i16>>;
 }
 

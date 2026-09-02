@@ -77,11 +77,8 @@ impl EdgeStt {
         self.run(utterance, Some(&mut sink), cancel)
     }
 
-    /// Loads a second, separate VAD model and hands back a session
-    /// that decides its own utterance boundaries from whatever audio
-    /// is pushed to it, then decodes each one through this same
-    /// transcriber. At most one session may be open at a time
-    /// (FR-015); it is released when the session closes or is dropped.
+    /// Hands back a session that finds its own utterance boundaries in
+    /// pushed audio. At most one may be open at a time.
     #[cfg(feature = "streaming")]
     pub fn open_session(&self, config: EndpointConfig) -> Result<AudioSession<'_>> {
         config.check()?;

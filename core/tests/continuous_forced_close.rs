@@ -1,7 +1,7 @@
 //! An utterance that never produces a qualifying pause is still
 //! closed and delivered once it reaches the same maximum-duration
 //! ceiling a pre-bounded utterance is already held to -- never held
-//! open indefinitely (FR-009).
+//! open indefinitely.
 
 #![cfg(feature = "streaming")]
 

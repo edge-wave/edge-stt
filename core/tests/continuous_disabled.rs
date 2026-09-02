@@ -1,7 +1,7 @@
-//! Continuous input is opt-in (FR-010). A build without `streaming`,
-//! or a second session on one transcriber (FR-015), must say so
-//! immediately -- never fall back to requiring pre-bounded utterances
-//! or behave unpredictably.
+//! Continuous input is opt-in. A build without `streaming`, or a
+//! second session on one transcriber, must say so immediately --
+//! never fall back to requiring pre-bounded utterances or behave
+//! unpredictably.
 
 mod support;
 

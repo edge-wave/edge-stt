@@ -1,6 +1,5 @@
 //! A continuous session counts against the same client-capacity limit
-//! that already governs ordinary per-utterance requests -- no
-//! separate limit for streaming (FR-014).
+//! that already governs ordinary per-utterance requests.
 
 mod support;
 

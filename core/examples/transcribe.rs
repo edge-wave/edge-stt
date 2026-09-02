@@ -2,10 +2,10 @@
 //!
 //! usage: transcribe [--partials] [--bench] [--language ko]
 //!                   [--accelerator metal] [--threads 4]
-//!                   [--continuous --vad-model <path>] <model> <wav>...
+//!                   [--continuous --vad-model <path> [--pause-tolerance-ms N]] <model> <wav>...
 
 use std::process::ExitCode;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use edge_stt_core::{
     Accelerator, CancelToken, Config, EdgeStt, EndpointConfig, Language, ModelSpec, Transcript,
@@ -14,7 +14,7 @@ use edge_stt_core::{
 
 const USAGE: &str = "usage: transcribe [--partials] [--bench] [--language ko] \
                      [--accelerator cpu|metal|cuda|vulkan] [--threads N] \
-                     [--continuous --vad-model <path>] <model> <wav>...";
+                     [--continuous --vad-model <path> [--pause-tolerance-ms N]] <model> <wav>...";
 
 struct Args {
     partials: bool,
@@ -24,6 +24,7 @@ struct Args {
     threads: Option<u16>,
     continuous: bool,
     vad_model: Option<String>,
+    pause_tolerance_ms: Option<u64>,
     model: String,
     wavs: Vec<String>,
 }
@@ -92,7 +93,11 @@ fn main() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
-            if let Err(why) = run_continuous(&stt, &samples, EndpointConfig::new(vad_model)) {
+            let mut config = EndpointConfig::new(vad_model);
+            if let Some(ms) = args.pause_tolerance_ms {
+                config = config.with_pause_tolerance(Duration::from_millis(ms));
+            }
+            if let Err(why) = run_continuous(&stt, &samples, config) {
                 eprintln!("{wav}: {why}");
                 return ExitCode::FAILURE;
             }
@@ -221,6 +226,7 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
         threads: None,
         continuous: false,
         vad_model: None,
+        pause_tolerance_ms: None,
         model: String::new(),
         wavs: vec![],
     };
@@ -234,6 +240,7 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
             "--threads" => parsed.threads = Some(args.next()?.parse().ok()?),
             "--continuous" => parsed.continuous = true,
             "--vad-model" => parsed.vad_model = Some(args.next()?),
+            "--pause-tolerance-ms" => parsed.pause_tolerance_ms = Some(args.next()?.parse().ok()?),
             other => positional.push(other.to_string()),
         }
     }

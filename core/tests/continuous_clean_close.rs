@@ -1,5 +1,5 @@
 //! `session.close()` mid-utterance finalizes and delivers whatever
-//! was captured (FR-013). A second `close()` call is a no-op, not an
+//! was captured. A second `close()` call is a no-op, not an
 //! error, and does not re-deliver anything.
 
 #![cfg(feature = "streaming")]

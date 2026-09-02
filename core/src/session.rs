@@ -83,9 +83,9 @@ impl<'a> AudioSession<'a> {
         Ok(None)
     }
 
-    /// Finalizes and delivers whatever utterance was in progress
-    /// (FR-013), then closes the session. A second call is a no-op
-    /// returning `Ok(None)`, not an error.
+    /// Finalizes and delivers whatever utterance was in progress,
+    /// then closes the session. A second call is a no-op returning
+    /// `Ok(None)`, not an error.
     pub fn close(&mut self) -> Result<Option<Transcript>> {
         if self.state == State::Closed {
             return Ok(None);
@@ -112,11 +112,8 @@ impl<'a> AudioSession<'a> {
 }
 
 impl Drop for AudioSession<'_> {
-    /// Closing without calling `close()` first still frees the slot
-    /// FR-015 holds open, but discards anything still in progress --
-    /// the same as a dropped connection on the remote path. Does
-    /// nothing if `close()` already ran: by then a *different* session
-    /// may have claimed the slot, and this one must not clear it.
+    /// Frees the open slot if `close()` never ran, discarding anything
+    /// in progress. A no-op if it did -- another session may hold it by then.
     fn drop(&mut self) {
         if self.state != State::Closed {
             self.open_flag.store(false, Ordering::Release);
@@ -128,10 +125,8 @@ fn sample_duration(count: usize) -> Duration {
     Duration::from_secs_f64(count as f64 / 16_000.0)
 }
 
-/// One `AtomicBool` per `EdgeStt`, so `open_session` can enforce
-/// FR-015 without needing `&mut self` -- which would break the
-/// existing shared-`&self` usage the server relies on. Only meaningful
-/// alongside `streaming`, which is the only feature that ever claims it.
+/// One `AtomicBool` per `EdgeStt`: lets `open_session` enforce "one at
+/// a time" without `&mut self`, which the server's shared use needs.
 #[cfg(feature = "streaming")]
 pub(crate) struct SessionSlot(AtomicBool);
 
