@@ -56,11 +56,14 @@ impl<'a> AudioSession<'a> {
     /// the moment the endpointer -- or the same maximum-duration
     /// ceiling a pre-bounded utterance is already held to -- considers
     /// one utterance finished; otherwise `None`, with the audio staying
-    /// buffered for the next call.
+    /// buffered for the next call. `on_partial` is `None` exactly like
+    /// `transcribe` (as opposed to `transcribe_with`): a caller that
+    /// asks for nothing registers no callback with the decoder and
+    /// pays no cost for it.
     pub fn push(
         &mut self,
         samples: &[i16],
-        mut on_partial: impl FnMut(Partial),
+        on_partial: Option<&mut dyn FnMut(Partial)>,
     ) -> Result<Option<Transcript>> {
         if self.state == State::Closed {
             return Ok(None);
@@ -68,13 +71,13 @@ impl<'a> AudioSession<'a> {
 
         self.buffered += sample_duration(samples.len());
         if let Some(finished) = self.endpointer.push(samples)? {
-            return self.decode(finished, &mut on_partial).map(Some);
+            return self.decode(finished, on_partial).map(Some);
         }
 
         if self.buffered >= self.max_duration
             && let Some(finished) = self.endpointer.take_remainder()
         {
-            return self.decode(finished, &mut on_partial).map(Some);
+            return self.decode(finished, on_partial).map(Some);
         }
 
         Ok(None)
@@ -91,7 +94,7 @@ impl<'a> AudioSession<'a> {
         self.open_flag.store(false, Ordering::Release);
 
         match self.endpointer.take_remainder() {
-            Some(finished) => self.decode(finished, &mut |_partial: Partial| {}).map(Some),
+            Some(finished) => self.decode(finished, None).map(Some),
             None => Ok(None),
         }
     }
@@ -99,12 +102,12 @@ impl<'a> AudioSession<'a> {
     fn decode(
         &mut self,
         samples: Vec<i16>,
-        on_partial: &mut dyn FnMut(Partial),
+        on_partial: Option<&mut dyn FnMut(Partial)>,
     ) -> Result<Transcript> {
         self.buffered = Duration::ZERO;
         let utterance = Utterance::mono_16k(&samples);
         let cancel = CancelToken::new();
-        self.stt.run(&utterance, Some(on_partial), &cancel)
+        self.stt.run(&utterance, on_partial, &cancel)
     }
 }
 

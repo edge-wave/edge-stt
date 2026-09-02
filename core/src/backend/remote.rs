@@ -48,7 +48,7 @@ impl RemoteBackend {
 }
 
 impl Backend for RemoteBackend {
-    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_>) -> Result<Transcript> {
+    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_, '_>) -> Result<Transcript> {
         let started = Instant::now();
         if work.cancel.is_cancelled() {
             return Err(Error::Cancelled);
@@ -145,7 +145,7 @@ impl RemoteBackend {
     async fn read_replies(
         &self,
         socket: &mut Socket,
-        work: &mut Work<'_>,
+        work: &mut Work<'_, '_>,
         started: Instant,
     ) -> Result<Transcript> {
         loop {

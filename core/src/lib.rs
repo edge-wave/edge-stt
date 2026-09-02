@@ -104,12 +104,14 @@ impl EdgeStt {
         })
     }
 
-    pub(crate) fn run<'a>(
+    pub(crate) fn run(
         &self,
         utterance: &Utterance<'_>,
-        on_partial: Option<&'a mut dyn FnMut(Partial)>,
-        cancel: &'a CancelToken,
+        on_partial: Option<&mut dyn FnMut(Partial)>,
+        cancel: &CancelToken,
     ) -> Result<Transcript> {
+        // Distinct lifetimes on Work let this take a caller's existing
+        // `on_partial` borrow alongside a cancel token this call owns.
         utterance.check(self.config.max_duration)?;
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);

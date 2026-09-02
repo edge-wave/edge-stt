@@ -16,15 +16,17 @@ pub mod remote;
 pub mod whisper;
 
 /// Where a backend reports progress and checks whether to stop.
-pub struct Work<'a> {
-    pub on_partial: Option<&'a mut dyn FnMut(Partial)>,
-    pub cancel: &'a CancelToken,
+/// Two lifetimes because the callback and the cancel token routinely
+/// come from unrelated borrows (a session's own vs. a fresh one).
+pub struct Work<'p, 'c> {
+    pub on_partial: Option<&'p mut dyn FnMut(Partial)>,
+    pub cancel: &'c CancelToken,
     pub timeout: Option<Duration>,
     emitted: u32,
 }
 
-impl<'a> Work<'a> {
-    pub fn new(cancel: &'a CancelToken) -> Self {
+impl<'p, 'c> Work<'p, 'c> {
+    pub fn new(cancel: &'c CancelToken) -> Self {
         Self {
             on_partial: None,
             cancel,
@@ -54,7 +56,7 @@ impl<'a> Work<'a> {
 /// Shared rather than owned, so the server can serve several clients
 /// from one loaded model.
 pub trait Backend: Send + Sync {
-    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_>) -> Result<Transcript>;
+    fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_, '_>) -> Result<Transcript>;
 
     fn kind(&self) -> BackendKind;
 }
