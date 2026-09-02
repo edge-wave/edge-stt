@@ -43,6 +43,23 @@ pub enum ClientMessage {
     Cancel {
         request_id: String,
     },
+    /// Opens a continuous session: audio arrives as binary frames with
+    /// no predetermined end, and the server decides utterance
+    /// boundaries itself, sending `final` once per detected one.
+    OpenStream {
+        request_id: String,
+        format: WireFormat,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        language: Option<String>,
+        want_partials: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pause_tolerance_ms: Option<u64>,
+    },
+    /// Clean shutdown of a continuous session: finalizes whatever
+    /// utterance was in progress before the connection may close.
+    CloseStream {
+        request_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

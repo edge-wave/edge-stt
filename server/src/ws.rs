@@ -65,6 +65,36 @@ async fn serve(mut socket: WebSocket, server: Arc<Server>) {
                         let _ = send(&mut socket, ServerMessage::Cancelled { request_id }).await;
                         return;
                     }
+                    ClientMessage::OpenStream {
+                        request_id,
+                        format,
+                        language,
+                        want_partials,
+                        pause_tolerance_ms,
+                    } => {
+                        if format != edge_stt_core::wire::WireFormat::mono_16k() {
+                            let refusal = error_message(
+                                &request_id,
+                                "unsupported_audio",
+                                "16000 Hz mono 16-bit is the only shape this server takes",
+                            );
+                            let _ = send(&mut socket, refusal).await;
+                            return;
+                        }
+                        run_continuous(
+                            &mut socket,
+                            &server,
+                            request_id,
+                            language,
+                            want_partials,
+                            pause_tolerance_ms,
+                        )
+                        .await;
+                        return;
+                    }
+                    // Only meaningful inside run_continuous's own loop; one
+                    // here means no stream was ever opened. Nothing to do.
+                    ClientMessage::CloseStream { .. } => continue,
                 }
             }
             Message::Binary(bytes) => {
@@ -197,6 +227,127 @@ async fn run(socket: &mut WebSocket, server: &Arc<Server>, mut session: Session)
             }
         }
     }
+}
+
+/// Continuous input: audio arrives with no predetermined end, and the
+/// server -- not the caller -- decides utterance boundaries, sending
+/// `final` once per one it finds until `close_stream` or a disconnect.
+async fn run_continuous(
+    socket: &mut WebSocket,
+    server: &Arc<Server>,
+    request_id: String,
+    language: Option<String>,
+    want_partials: bool,
+    pause_tolerance_ms: Option<u64>,
+) {
+    let Some(stt) = server.transcriber() else {
+        let refusal = error_message(
+            &request_id,
+            "model_unavailable",
+            "the model is still loading",
+        );
+        let _ = send(socket, refusal).await;
+        return;
+    };
+
+    if let Some(asked) = &language
+        && server.language.as_deref() != Some(asked.as_str())
+    {
+        let served = server.language.as_deref().unwrap_or("whatever it detects");
+        let refusal = error_message(
+            &request_id,
+            "unsupported_language",
+            &format!("this server transcribes {served}, not {asked}"),
+        );
+        let _ = send(socket, refusal).await;
+        return;
+    }
+
+    let Some(vad_model) = server.vad_model.clone() else {
+        let refusal = error_message(
+            &request_id,
+            "streaming_unavailable",
+            "this server has no VAD model configured",
+        );
+        let _ = send(socket, refusal).await;
+        return;
+    };
+
+    // Held for the whole session, same as FR-014 asks: a continuous
+    // session counts as one client, not a per-utterance cost.
+    let permit = match server.capacity.admit().await {
+        Admission::Started(permit) => {
+            let accepted = ServerMessage::Accepted {
+                request_id: request_id.clone(),
+                queue_position: 0,
+            };
+            let _ = send(socket, accepted).await;
+            permit
+        }
+        Admission::Queued(permit, position) => {
+            let accepted = ServerMessage::Accepted {
+                request_id: request_id.clone(),
+                queue_position: position,
+            };
+            let _ = send(socket, accepted).await;
+            permit
+        }
+        Admission::Full => {
+            let full = ServerMessage::Error {
+                request_id: request_id.clone(),
+                code: "at_capacity".to_string(),
+                message: format!("{} requests already decoding", server.capacity.limit()),
+                retry_after_ms: Some(Capacity::retry_after_ms()),
+                queue_position: None,
+            };
+            let _ = send(socket, full).await;
+            return;
+        }
+    };
+
+    let mut config = edge_stt_core::EndpointConfig::new(&vad_model);
+    if let Some(ms) = pause_tolerance_ms {
+        config = config.with_pause_tolerance(std::time::Duration::from_millis(ms));
+    }
+
+    let (audio_tx, mut events_rx) = crate::session::spawn_continuous(stt, config, want_partials);
+
+    loop {
+        tokio::select! {
+            incoming = socket.recv() => {
+                match incoming {
+                    Some(Ok(Message::Binary(bytes))) => {
+                        let samples = samples_from(&bytes);
+                        if audio_tx.send(crate::session::AudioInput::Chunk(samples)).is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(ClientMessage::CloseStream { .. }) = serde_json::from_str(&text) {
+                            let _ = audio_tx.send(crate::session::AudioInput::CleanClose);
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+            event = events_rx.recv() => {
+                match event {
+                    Some(crate::session::ContinuousEvent::Partial(p)) => {
+                        let _ = send(socket, ServerMessage::from_partial(&request_id, &p)).await;
+                    }
+                    Some(crate::session::ContinuousEvent::Final(t)) => {
+                        let _ = send(socket, ServerMessage::from_transcript(&request_id, &t)).await;
+                    }
+                    Some(crate::session::ContinuousEvent::Error(why)) => {
+                        let _ = send(socket, error_from(&request_id, &why)).await;
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+    drop(permit);
 }
 
 fn error_from(request_id: &str, why: &Error) -> ServerMessage {
