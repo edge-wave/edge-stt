@@ -123,6 +123,12 @@ typedef int32_t edge_stt_error;
 typedef struct edge_stt_handle edge_stt_handle;
 
 /**
+ * What a handle points to. Opaque on the C side, which only ever
+ * names the pointer to this: `edge_stt_session_h`.
+ */
+typedef struct edge_stt_session_handle edge_stt_session_handle;
+
+/**
  * What a transcript handle points to. Opaque on the C side, which
  * only ever names the pointer to this: `edge_stt_transcript_h`. Owns
  * its strings so the caller never has to free one separately.
@@ -171,6 +177,17 @@ typedef void (*edge_stt_partial_cb)(const edge_stt_partial *partial, void *user)
  * The handle a C caller holds for one transcript.
  */
 typedef edge_stt_transcript_handle *edge_stt_transcript_h;
+
+/**
+ * The handle a C caller holds.
+ */
+typedef edge_stt_session_handle *edge_stt_session_h;
+
+/**
+ * Owns the transcript it is handed; free it with
+ * edge_stt_transcript_free once done with it.
+ */
+typedef void (*edge_stt_transcript_cb)(edge_stt_transcript_h transcript, void *user);
 
 #ifdef __cplusplus
 extern "C" {
@@ -363,6 +380,78 @@ float edge_stt_transcript_get_segment_confidence(edge_stt_transcript_h transcrip
  * @param[in] transcript the transcript, or NULL, which does nothing
  */
 void edge_stt_transcript_free(edge_stt_transcript_h transcript);
+
+/**
+ * @brief Open a continuous session: push samples as they arrive
+ *        instead of handing over one complete recording.
+ *
+ * The parent handle must stay alive, with a model loaded, for as
+ * long as the session stays open. Only one session may be open on a
+ * handle at a time.
+ *
+ * @param[in] stt the handle, with a model loaded
+ * @param[in] vad_model a ggml VAD file -- a second, separate model
+ *            from the one edge_stt_load_model loaded
+ * @param[in] pause_tolerance_ms how long a pause must last before an
+ *            utterance is considered finished, or zero for the
+ *            documented default
+ * @return The handle, or NULL on failure --
+ *         edge_stt_get_last_error() says why.
+ * @see edge_stt_session_push, edge_stt_session_close, edge_stt_session_free
+ */
+edge_stt_session_h edge_stt_session_new(edge_stt_h stt,
+                                        const char *vad_model,
+                                        uint64_t pause_tolerance_ms);
+
+/**
+ * @brief Ask to be told when the endpointer finishes an utterance.
+ *
+ * @param[in] session the handle
+ * @param[in] callback called on the thread that called
+ *            edge_stt_session_push or edge_stt_session_close, never
+ *            after that call has returned. NULL stops delivery
+ * @param[in] user handed back to the callback untouched
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_session_push, edge_stt_session_close
+ */
+int32_t edge_stt_on_transcript(edge_stt_session_h session,
+                               edge_stt_transcript_cb callback,
+                               void *user);
+
+/**
+ * @brief Feed one piece of newly-captured audio.
+ *
+ * Delivers nothing to the caller directly: an utterance, when the
+ * endpointer finishes one, arrives through the callback set with
+ * edge_stt_on_transcript instead.
+ *
+ * @param[in] session the handle
+ * @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the call
+ * @param[in] count how many samples
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_on_transcript, edge_stt_session_close
+ */
+int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples, uintptr_t count);
+
+/**
+ * @brief Finalize and deliver whatever utterance was in progress,
+ *        then close the session. A second call does nothing.
+ *
+ * @param[in] session the handle
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_on_transcript, edge_stt_session_free
+ */
+int32_t edge_stt_session_close(edge_stt_session_h session);
+
+/**
+ * @brief Release the session and everything it owns. Does not close
+ *        it first: call edge_stt_session_close beforehand for
+ *        whatever was in progress to be delivered.
+ *
+ * @param[in] session the handle, or NULL, which does nothing
+ * @see edge_stt_session_new, edge_stt_session_close
+ */
+void edge_stt_session_free(edge_stt_session_h session);
 
 #ifdef __cplusplus
 }  // extern "C"

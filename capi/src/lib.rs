@@ -6,6 +6,7 @@
 mod convert;
 mod error;
 mod partials;
+mod session;
 
 use std::ffi::{c_char, c_void};
 use std::sync::Mutex;
@@ -21,6 +22,10 @@ pub use convert::edge_stt_transcript_h;
 pub use convert::edge_stt_transcript_handle as edge_stt_transcript_t;
 pub use error::edge_stt_error;
 pub use partials::{edge_stt_partial, edge_stt_partial_cb as edge_stt_partial_callback};
+pub use session::{
+    edge_stt_session_h, edge_stt_session_handle as edge_stt_session_t, edge_stt_transcript_cb,
+    edge_stt_transcript_cb as edge_stt_transcript_callback,
+};
 
 /// What a handle points to. Opaque on the C side, which only ever
 /// names the pointer to this: `edge_stt_h`.
@@ -402,6 +407,12 @@ pub unsafe extern "C" fn edge_stt_transcript_free(transcript: edge_stt_transcrip
 
 fn settings(handle: &edge_stt_handle) -> std::sync::MutexGuard<'_, Settings> {
     lock(&handle.settings)
+}
+
+/// Lets `session.rs` reach the loaded model without `core` itself
+/// being a public field of `edge_stt_handle`.
+pub(crate) fn core_guard(handle: &edge_stt_handle) -> std::sync::MutexGuard<'_, Option<EdgeStt>> {
+    lock(&handle.core)
 }
 
 /// A poisoned lock means another thread panicked, which is not a
