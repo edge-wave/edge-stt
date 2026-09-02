@@ -125,6 +125,10 @@ typedef struct edge_stt_handle edge_stt_handle;
 /**
  * What a handle points to. Opaque on the C side, which only ever
  * names the pointer to this: `edge_stt_session_h`.
+ *
+ * Its own partial and transcript callbacks -- not the parent
+ * `edge_stt_h`'s -- so a one-shot edge_stt_transcribe running
+ * against the same handle never shares a sink with this session.
  */
 typedef struct edge_stt_session_handle edge_stt_session_handle;
 
@@ -404,6 +408,26 @@ edge_stt_session_h edge_stt_session_new(edge_stt_h stt,
                                         uint64_t pause_tolerance_ms);
 
 /**
+ * @brief Ask to be told about words as they are decoded, for this
+ *        session specifically.
+ *
+ * Independent of edge_stt_set_partial_cb on the parent handle: a
+ * one-shot edge_stt_transcribe using that one, run alongside this
+ * session, delivers to its own sink instead of this one.
+ *
+ * @param[in] session the handle
+ * @param[in] callback called on the thread that called
+ *            edge_stt_session_push, never after that call has
+ *            returned. NULL turns partials off
+ * @param[in] user handed back to the callback untouched
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_session_push
+ */
+int32_t edge_stt_session_set_partial_cb(edge_stt_session_h session,
+                                        edge_stt_partial_cb callback,
+                                        void *user);
+
+/**
  * @brief Ask to be told when the endpointer finishes an utterance.
  *
  * @param[in] session the handle
@@ -414,22 +438,22 @@ edge_stt_session_h edge_stt_session_new(edge_stt_h stt,
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
  * @see edge_stt_session_push, edge_stt_session_close
  */
-int32_t edge_stt_set_transcript_cb(edge_stt_session_h session,
-                                   edge_stt_transcript_cb callback,
-                                   void *user);
+int32_t edge_stt_session_set_transcript_cb(edge_stt_session_h session,
+                                           edge_stt_transcript_cb callback,
+                                           void *user);
 
 /**
  * @brief Feed one piece of newly-captured audio.
  *
  * Delivers nothing to the caller directly: an utterance, when the
  * endpointer finishes one, arrives through the callback set with
- * edge_stt_set_transcript_cb instead.
+ * edge_stt_session_set_transcript_cb instead.
  *
  * @param[in] session the handle
  * @param[in] samples 16000 Hz mono 16-bit samples. Borrowed for the call
  * @param[in] count how many samples
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
- * @see edge_stt_set_transcript_cb, edge_stt_session_close
+ * @see edge_stt_session_set_partial_cb, edge_stt_session_set_transcript_cb, edge_stt_session_close
  */
 int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples, uintptr_t count);
 
@@ -439,7 +463,7 @@ int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples
  *
  * @param[in] session the handle
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
- * @see edge_stt_set_transcript_cb, edge_stt_session_free
+ * @see edge_stt_session_set_transcript_cb, edge_stt_session_free
  */
 int32_t edge_stt_session_close(edge_stt_session_h session);
 

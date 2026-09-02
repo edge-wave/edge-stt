@@ -63,7 +63,8 @@ int main(void) {
     /* A null session handle is an error, never a crash. */
     CHECK(edge_stt_session_push(NULL, samples, 16000) == EDGE_STT_NULL_ARGUMENT);
     CHECK(edge_stt_session_close(NULL) == EDGE_STT_NULL_ARGUMENT);
-    CHECK(edge_stt_set_transcript_cb(NULL, NULL, NULL) == EDGE_STT_NULL_ARGUMENT);
+    CHECK(edge_stt_session_set_transcript_cb(NULL, NULL, NULL) == EDGE_STT_NULL_ARGUMENT);
+    CHECK(edge_stt_session_set_partial_cb(NULL, NULL, NULL) == EDGE_STT_NULL_ARGUMENT);
     edge_stt_session_free(NULL);
 
     /* Opening a session before a model is loaded says exactly that. */
