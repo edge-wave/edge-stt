@@ -407,6 +407,7 @@ dependencies = [
  "clap",
  "edge-stt-core",
  "futures-util",
+ "hound",
  "log",
  "reqwest",
  "serde",

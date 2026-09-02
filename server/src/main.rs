@@ -32,6 +32,11 @@ struct Args {
     /// Force a language instead of detecting one.
     #[arg(long)]
     language: Option<String>,
+
+    /// A GGML Silero VAD file. Needed only to accept continuous
+    /// (open_stream) sessions; ordinary requests don't need it.
+    #[arg(long)]
+    vad_model: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -52,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         credential,
         args.language.clone(),
         args.capacity,
+        args.vad_model.clone(),
     ));
     server.load_model_in_background(&args.model);
 

@@ -25,16 +25,25 @@ pub struct Server {
     pub language: Option<String>,
     pub capacity: Capacity,
     pub readiness: Readiness,
+    /// Needed only for continuous (open_stream) sessions; absent means
+    /// this server refuses them rather than guessing a default.
+    pub vad_model: Option<std::path::PathBuf>,
 }
 
 impl Server {
-    pub fn new(credential: Option<String>, language: Option<String>, capacity: usize) -> Self {
+    pub fn new(
+        credential: Option<String>,
+        language: Option<String>,
+        capacity: usize,
+        vad_model: Option<std::path::PathBuf>,
+    ) -> Self {
         Self {
             stt: OnceLock::new(),
             credential,
             language,
             capacity: Capacity::new(capacity),
             readiness: Readiness::default(),
+            vad_model,
         }
     }
 
