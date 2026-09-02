@@ -6,7 +6,9 @@
 pub mod backend;
 pub mod cancel;
 pub mod config;
+pub mod endpoint;
 pub mod error;
+pub mod session;
 pub mod transcript;
 pub mod utterance;
 #[cfg(feature = "remote")]
@@ -17,17 +19,23 @@ pub use config::{
     Accelerator, AudioFormat, BackendChoice, BackendKind, Config, Language, ModelSize, ModelSpec,
     RemoteConfig, SampleType, Secret,
 };
+pub use endpoint::EndpointConfig;
 pub use error::{Error, Result};
+pub use session::AudioSession;
 pub use transcript::{Partial, PartialKind, Segment, Transcript};
 pub use utterance::Utterance;
 
 use backend::{Backend, Work};
+#[cfg(feature = "streaming")]
+use session::SessionSlot;
 
 /// A built transcriber. Whether it decodes here or asks a server is
 /// settled by the configuration it was built with.
 pub struct EdgeStt {
     backend: Box<dyn Backend>,
     config: Config,
+    #[cfg(feature = "streaming")]
+    session_open: SessionSlot,
 }
 
 impl EdgeStt {
@@ -36,7 +44,12 @@ impl EdgeStt {
     pub fn new(config: Config) -> Result<Self> {
         config.check()?;
         let backend = build_backend(&config)?;
-        Ok(Self { backend, config })
+        Ok(Self {
+            backend,
+            config,
+            #[cfg(feature = "streaming")]
+            session_open: SessionSlot::new(),
+        })
     }
 
     pub fn backend_kind(&self) -> BackendKind {
@@ -64,7 +77,34 @@ impl EdgeStt {
         self.run(utterance, Some(&mut sink), cancel)
     }
 
-    fn run<'a>(
+    /// Loads a second, separate VAD model and hands back a session
+    /// that decides its own utterance boundaries from whatever audio
+    /// is pushed to it, then decodes each one through this same
+    /// transcriber. At most one session may be open at a time
+    /// (FR-015); it is released when the session closes or is dropped.
+    #[cfg(feature = "streaming")]
+    pub fn open_session(&self, config: EndpointConfig) -> Result<AudioSession<'_>> {
+        config.check()?;
+        let open_flag = self.session_open.claim()?;
+        let endpointer = endpoint::whisper_vad::WhisperVad::load(&config).inspect_err(|_| {
+            open_flag.store(false, std::sync::atomic::Ordering::Release);
+        })?;
+        Ok(AudioSession::new(
+            self,
+            Box::new(endpointer),
+            self.config.max_duration,
+            open_flag,
+        ))
+    }
+
+    #[cfg(not(feature = "streaming"))]
+    pub fn open_session(&self, _config: EndpointConfig) -> Result<AudioSession<'_>> {
+        Err(Error::BackendUnavailable {
+            backend: "streaming",
+        })
+    }
+
+    pub(crate) fn run<'a>(
         &self,
         utterance: &Utterance<'_>,
         on_partial: Option<&'a mut dyn FnMut(Partial)>,
