@@ -7,6 +7,7 @@ tests do.
 
 import os
 import pathlib
+import wave
 
 import pytest
 
@@ -30,6 +31,14 @@ def vad_model_path():
     return path
 
 
+def sample_wav_samples():
+    path = os.environ.get("EDGE_STT_SAMPLE_WAV")
+    if not path:
+        pytest.skip("set EDGE_STT_SAMPLE_WAV to a 16 kHz mono 16-bit recording of speech")
+    with wave.open(path, "rb") as wav:
+        return wav.readframes(wav.getnframes())
+
+
 def test_opening_a_session_needs_a_vad_model_that_exists():
     with edge_stt.EdgeStt(model=model_path()) as stt:
         with pytest.raises(edge_stt.ModelMissingError):
@@ -44,6 +53,33 @@ def test_a_session_is_a_context_manager_and_closing_twice_is_fine():
                 assert session.push(silence) is None
         # __exit__ already closed it; a second close is a no-op, not an error.
         assert session.close() is None
+
+
+def test_push_and_close_both_deliver_partials_for_real_speech():
+    # A short clip like this rarely hits a natural pause before the
+    # loop runs out of audio, so the actual decode -- and its
+    # partials -- usually happens inside close(), not any push().
+    # Both are wired the same way, so on_partial is passed to both.
+    samples = sample_wav_samples()
+    seen = []
+    with edge_stt.EdgeStt(model=model_path()) as stt:
+        with stt.open_session(vad_model=vad_model_path()) as session:
+            chunk = 1_600 * 2  # bytes: 1600 samples * 2 bytes/sample
+            transcript = None
+            for start in range(0, len(samples), chunk):
+                found = session.push(
+                    samples[start : start + chunk], on_partial=seen.append
+                )
+                if found is not None:
+                    transcript = found
+            transcript = session.close(on_partial=seen.append) or transcript
+
+    # One long push loop could in principle span more than one utterance,
+    # so seq is only checked per-partial, not for a single 0..n run.
+    assert seen, "a real recording of speech should produce at least one partial"
+    assert all(isinstance(p, edge_stt.Partial) and p.seq >= 0 for p in seen)
+    assert transcript is not None
+    assert transcript.text.strip() != ""
 
 
 def test_only_one_session_may_be_open_at_a_time():

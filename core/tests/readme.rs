@@ -54,7 +54,7 @@ fn the_continuous_example(
             println!("{}", transcript.text);
         }
     }
-    if let Some(transcript) = session.close()? {
+    if let Some(transcript) = session.close(None)? {
         println!("{}", transcript.text);
     }
     Ok(())
@@ -70,7 +70,7 @@ fn the_examples_above_are_the_ones_the_readme_shows() {
         "stt.transcribe_with(&utterance, |p| print!(\"{}\", p.text), &cancel)?;",
         "let mut session = stt.open_session(EndpointConfig::new(\"models/ggml-silero-v5.1.2.bin\"))?;",
         "if let Some(transcript) = session.push(chunk, None)? {",
-        "if let Some(transcript) = session.close()? {",
+        "if let Some(transcript) = session.close(None)? {",
     ] {
         assert!(
             readme.contains(line),

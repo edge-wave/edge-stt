@@ -77,7 +77,7 @@ for chunk in samples.chunks(1_600) {
         println!("{}", transcript.text);
     }
 }
-if let Some(transcript) = session.close()? {
+if let Some(transcript) = session.close(None)? {
     println!("{}", transcript.text); // whatever was still in progress
 }
 ```
@@ -198,6 +198,10 @@ with stt.open_session(vad_model="models/ggml-silero-v5.1.2.bin") as session:
             print(transcript.text)
 ```
 
+Both `push` and `close` take an optional `on_partial` callback, same as the Rust and C APIs
+-- the utterance `close` finalizes decodes the same way `push` does, so interim results can
+still arrive from it too.
+
 ## C
 
 ```bash
@@ -223,7 +227,9 @@ edge_stt_session_free(session);
 `on_transcript` receives an owned `edge_stt_transcript_h` per finished
 utterance, freed the same way `edge_stt_transcribe`'s does. `0` for
 the last argument to `edge_stt_session_new` means the documented
-default pause tolerance.
+default pause tolerance. `edge_stt_session_set_partial_cb` is this
+session's own partial slot, independent of the handle's -- set it the
+same way if interim results are wanted while a push or close decodes.
 
 ## Licence
 

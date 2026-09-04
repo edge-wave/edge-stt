@@ -118,7 +118,11 @@ pub fn spawn_continuous(
                     }
                 }
                 AudioInput::CleanClose => {
-                    if let Ok(Some(transcript)) = session.close() {
+                    let mut sink = |p: Partial| {
+                        let _ = events_tx.send(ContinuousEvent::Partial(p));
+                    };
+                    let on_partial = want_partials.then_some(&mut sink as &mut dyn FnMut(Partial));
+                    if let Ok(Some(transcript)) = session.close(on_partial) {
                         let _ = events_tx.send(ContinuousEvent::Final(transcript));
                     }
                     return;
