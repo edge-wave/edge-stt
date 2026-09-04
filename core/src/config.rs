@@ -41,8 +41,8 @@ impl AudioFormat {
         }
     }
 
-    /// 16 kHz mono 16-bit. What edge-ear hands over at end of speech,
-    /// and the only shape transcription accepts.
+    /// 16 kHz mono 16-bit -- the only shape transcription accepts,
+    /// fixed by Whisper's architecture across every model size.
     pub const fn mono_16k() -> Self {
         Self::new(16_000, 1, SampleType::I16)
     }
