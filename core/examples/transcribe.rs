@@ -139,7 +139,7 @@ fn run_continuous(
             println!("{}", transcript.text);
         }
     }
-    if let Some(transcript) = session.close()? {
+    if let Some(transcript) = session.close(None)? {
         println!("{}", transcript.text);
     }
     Ok(())

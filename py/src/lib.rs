@@ -71,7 +71,7 @@ impl Segment {
     }
 }
 
-#[pyclass(frozen, get_all, skip_from_py_object)]
+#[pyclass(name = "Transcript", frozen, get_all, skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyTranscript {
     pub text: String,
@@ -120,7 +120,7 @@ fn to_python(transcript: &Transcript) -> PyTranscript {
     }
 }
 
-#[pyclass(frozen, get_all, skip_from_py_object)]
+#[pyclass(name = "Partial", frozen, get_all, skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyPartial {
     pub seq: u32,
@@ -132,6 +132,14 @@ pub struct PyPartial {
 impl PyPartial {
     fn __repr__(&self) -> String {
         format!("Partial({}, {:?})", self.seq, self.text)
+    }
+}
+
+fn to_python_partial(partial: &Partial) -> PyPartial {
+    PyPartial {
+        seq: partial.seq,
+        text: partial.text.clone(),
+        replaces: partial.kind == edge_stt_core::PartialKind::Replace,
     }
 }
 
@@ -161,13 +169,7 @@ impl PartialStream {
                 partials.recv_timeout(Duration::from_millis(20))
             };
             match waited {
-                Ok(partial) => {
-                    return Ok(Some(PyPartial {
-                        seq: partial.seq,
-                        text: partial.text,
-                        replaces: partial.kind == edge_stt_core::PartialKind::Replace,
-                    }));
-                }
+                Ok(partial) => return Ok(Some(to_python_partial(&partial))),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Let the rest of the program run, and let Ctrl-C
                     // through, while the decoder works.
@@ -235,29 +237,66 @@ pub struct PySession {
 #[pymethods]
 impl PySession {
     /// Feeds one piece of newly-captured audio. Returns the finished
-    /// utterance the moment one is detected, otherwise `None`.
-    #[pyo3(signature = (samples, sample_rate = 16_000))]
+    /// utterance the moment one is detected, otherwise `None`. If
+    /// `on_partial` is given, it is called -- on this thread, with the
+    /// GIL briefly reacquired each time -- for interim results while
+    /// this specific push decodes one.
+    #[pyo3(signature = (samples, sample_rate = 16_000, on_partial = None))]
     fn push(
         &self,
         py: Python<'_>,
         samples: &Bound<'_, PyAny>,
         sample_rate: u32,
+        on_partial: Option<Py<PyAny>>,
     ) -> PyResult<Option<PyTranscript>> {
         let audio = read_samples(samples, sample_rate)?;
         py.detach(|| {
             let mut session = self.session.lock().expect("a lock nobody poisons");
-            session.push(&audio, None)
+            match &on_partial {
+                Some(callback) => {
+                    let mut sink = |partial: Partial| {
+                        let handed = to_python_partial(&partial);
+                        Python::attach(|py| {
+                            if let Err(why) = callback.call1(py, (handed,)) {
+                                why.print(py);
+                            }
+                        });
+                    };
+                    session.push(&audio, Some(&mut sink))
+                }
+                None => session.push(&audio, None),
+            }
         })
         .map(|found| found.as_ref().map(to_python))
         .map_err(to_py)
     }
 
     /// Finalizes and returns whatever utterance was in progress. A
-    /// second call returns `None` rather than raising.
-    fn close(&self, py: Python<'_>) -> PyResult<Option<PyTranscript>> {
+    /// second call returns `None` rather than raising. The utterance
+    /// this finalizes decodes like any other push -- `on_partial`
+    /// works the same way here too.
+    #[pyo3(signature = (on_partial = None))]
+    fn close(
+        &self,
+        py: Python<'_>,
+        on_partial: Option<Py<PyAny>>,
+    ) -> PyResult<Option<PyTranscript>> {
         py.detach(|| {
             let mut session = self.session.lock().expect("a lock nobody poisons");
-            session.close()
+            match &on_partial {
+                Some(callback) => {
+                    let mut sink = |partial: Partial| {
+                        let handed = to_python_partial(&partial);
+                        Python::attach(|py| {
+                            if let Err(why) = callback.call1(py, (handed,)) {
+                                why.print(py);
+                            }
+                        });
+                    };
+                    session.close(Some(&mut sink))
+                }
+                None => session.close(None),
+            }
         })
         .map(|found| found.as_ref().map(to_python))
         .map_err(to_py)
@@ -269,7 +308,7 @@ impl PySession {
 
     #[pyo3(signature = (*_args))]
     fn __exit__(&self, py: Python<'_>, _args: &Bound<'_, PyAny>) -> PyResult<bool> {
-        self.close(py)?;
+        self.close(py, None)?;
         Ok(false)
     }
 }

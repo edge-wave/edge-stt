@@ -461,9 +461,12 @@ int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples
  * @brief Finalize and deliver whatever utterance was in progress,
  *        then close the session. A second call does nothing.
  *
+ * The utterance this finalizes decodes like any other: whatever is
+ * registered with edge_stt_session_set_partial_cb still runs for it.
+ *
  * @param[in] session the handle
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.
- * @see edge_stt_session_set_transcript_cb, edge_stt_session_free
+ * @see edge_stt_session_set_partial_cb, edge_stt_session_set_transcript_cb, edge_stt_session_free
  */
 int32_t edge_stt_session_close(edge_stt_session_h session);
 

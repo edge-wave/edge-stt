@@ -27,7 +27,7 @@ fn feed_in_chunks(samples: &[i16]) -> Vec<String> {
             texts.push(transcript.text);
         }
     }
-    if let Some(transcript) = session.close().expect("a clean close") {
+    if let Some(transcript) = session.close(None).expect("a clean close") {
         texts.push(transcript.text);
     }
     texts

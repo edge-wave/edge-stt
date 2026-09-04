@@ -55,7 +55,7 @@ fn closing_a_session_frees_it_for_a_new_one() {
     let mut first = stt
         .open_session(EndpointConfig::new(support::vad_model_path()))
         .expect("the first session");
-    first.close().expect("a clean close");
+    first.close(None).expect("a clean close");
     drop(first);
 
     stt.open_session(EndpointConfig::new(support::vad_model_path()))

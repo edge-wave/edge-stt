@@ -213,13 +213,24 @@ pub unsafe extern "C" fn edge_stt_session_push(
 /// @brief Finalize and deliver whatever utterance was in progress,
 ///        then close the session. A second call does nothing.
 ///
+/// The utterance this finalizes decodes like any other: whatever is
+/// registered with edge_stt_session_set_partial_cb still runs for it.
+///
 /// @param[in] session the handle
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
-/// @see edge_stt_session_set_transcript_cb, edge_stt_session_free
+/// @see edge_stt_session_set_partial_cb, edge_stt_session_set_transcript_cb, edge_stt_session_free
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_session_close(session: edge_stt_session_h) -> i32 {
     with_session!(session, handle => {
-        match lock(&handle.session).close() {
+        let (partial_cb, partial_user) = *lock(&handle.partial);
+        let mut sink = |p: Partial| deliver(partial_cb, partial_user, &p);
+        let on_partial: Option<&mut dyn FnMut(Partial)> = if partial_cb.is_some() {
+            Some(&mut sink)
+        } else {
+            None
+        };
+
+        match lock(&handle.session).close(on_partial) {
             Ok(Some(transcript)) => {
                 notify(handle, &transcript);
                 ok()

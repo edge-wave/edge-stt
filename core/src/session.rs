@@ -83,10 +83,15 @@ impl<'a> AudioSession<'a> {
         Ok(None)
     }
 
-    /// Finalizes and delivers whatever utterance was in progress,
-    /// then closes the session. A second call is a no-op returning
-    /// `Ok(None)`, not an error.
-    pub fn close(&mut self) -> Result<Option<Transcript>> {
+    /// Finalizes and delivers whatever utterance was in progress, then
+    /// closes the session. A second call is a no-op returning `Ok(None)`,
+    /// not an error. `on_partial` behaves exactly as it does for `push`:
+    /// the finalized utterance decodes like any other, and can still
+    /// have interim results on the way to its `Transcript`.
+    pub fn close(
+        &mut self,
+        on_partial: Option<&mut dyn FnMut(Partial)>,
+    ) -> Result<Option<Transcript>> {
         if self.state == State::Closed {
             return Ok(None);
         }
@@ -94,7 +99,7 @@ impl<'a> AudioSession<'a> {
         self.open_flag.store(false, Ordering::Release);
 
         match self.endpointer.take_remainder() {
-            Some(finished) => self.decode(finished, None).map(Some),
+            Some(finished) => self.decode(finished, on_partial).map(Some),
             None => Ok(None),
         }
     }

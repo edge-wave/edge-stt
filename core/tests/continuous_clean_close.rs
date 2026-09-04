@@ -35,10 +35,34 @@ fn closing_mid_utterance_finalizes_and_delivers_it() {
     }
 
     let closed = session
-        .close()
+        .close(None)
         .expect("a clean close")
         .expect("the in-progress utterance");
     assert_eq!(closed.text.trim(), expected.trim());
+}
+
+#[test]
+#[ignore = "needs a Whisper model and a VAD model"]
+fn closing_mid_utterance_still_delivers_partials() {
+    let (samples, _expected) = support::spoken_sample();
+    let stt = transcriber();
+    let mut session = stt
+        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .expect("a session");
+    for chunk in samples.chunks(1_600) {
+        session.push(chunk, None).expect("a push");
+    }
+
+    let mut seen = Vec::new();
+    let mut sink = |p: edge_stt_core::Partial| seen.push(p);
+    session
+        .close(Some(&mut sink))
+        .expect("a clean close")
+        .expect("the in-progress utterance");
+    assert!(
+        !seen.is_empty(),
+        "the utterance close() finalizes decodes the same way push() does -- it should carry partials too"
+    );
 }
 
 #[test]
@@ -53,8 +77,8 @@ fn a_second_close_is_a_no_op() {
         session.push(chunk, None).expect("a push");
     }
 
-    session.close().expect("the first close");
-    let second = session.close().expect("a second close must not error");
+    session.close(None).expect("the first close");
+    let second = session.close(None).expect("a second close must not error");
     assert!(
         second.is_none(),
         "a second close must return nothing, not re-deliver or error"
