@@ -34,6 +34,22 @@ pub struct WhisperBackend {
     language: Option<Language>,
 }
 
+/// Hands whisper.cpp's own running commentary to the `log` crate,
+/// which drops it unless a logger was installed. It goes to stderr
+/// until this runs, which also slows down whatever is being timed.
+pub fn route_logs() {
+    whisper_rs::install_logging_hooks();
+}
+
+/// What one pass over part of an utterance produced, and what it cost.
+/// Reported by the window probe, which measures the shape a live
+/// recogniser would run in before one exists to measure directly.
+#[derive(Debug, Clone)]
+pub struct WindowPass {
+    pub text: String,
+    pub took: Duration,
+}
+
 impl WhisperBackend {
     /// Loads the model now, so a missing or unusable file is an error
     /// here rather than on the first spoken word.
@@ -84,6 +100,52 @@ impl WhisperBackend {
                 .model_type_readable_str()
                 .map_or_else(|_| "unknown".to_string(), str::to_string),
         }
+    }
+
+    /// Recognises a partial utterance once, bounding the encoder to
+    /// `audio_ctx` frames; zero leaves whisper.cpp's own default.
+    pub fn probe_window(&self, samples: &[i16], audio_ctx: i32) -> Result<WindowPass> {
+        let mut audio = vec![0.0f32; samples.len()];
+        convert_integer_to_float_audio(samples, &mut audio).map_err(|why| Error::InvalidValue {
+            setting: "samples",
+            expected: "16-bit mono audio".to_string(),
+            got: why.to_string(),
+        })?;
+
+        let mut state = self
+            .context
+            .create_state()
+            .map_err(|why| Error::ModelUnusable {
+                path: self.model.path.clone(),
+                why: why.to_string(),
+            })?;
+
+        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        params.set_n_threads(i32::from(self.model.thread_count()));
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+        params.set_language(self.language.as_ref().map(Language::as_str));
+        if audio_ctx > 0 {
+            params.set_audio_ctx(audio_ctx);
+        }
+
+        let started = Instant::now();
+        state
+            .full(params, &audio)
+            .map_err(|why| Error::ModelUnusable {
+                path: self.model.path.clone(),
+                why: why.to_string(),
+            })?;
+        let took = started.elapsed();
+
+        let decoded = collect(&state)?;
+        let text: String = decoded.segments.iter().map(|s| s.text.as_str()).collect();
+        Ok(WindowPass {
+            text: text.trim().to_string(),
+            took,
+        })
     }
 
     fn reported_language(&self) -> Language {
