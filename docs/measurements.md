@@ -30,6 +30,70 @@ and more evenly paced than any microphone will hand you. And the first
 run of a model pays for warming the GPU up: `tiny` took 3.03 s cold and
 185 ms warm, which is why the cold figure is not in the table.
 
+### Window passes, Apple M4 Pro, processor
+
+What one pass over a partial utterance costs, taken with
+`probe_window`. These are the processor path, not Metal: a `ModelSpec`
+that names no accelerator asks for the processor, which is the trap the
+reading below is about. Median of repeated runs, machine at a load
+average of about four across twelve cores.
+
+| Model | 4 s buffered | 8 s buffered | Language |
+|---|---|---|---|
+| `tiny-q5_1` | 141 ms | 141 ms | English |
+| `base-q5_1` | 245 ms | 245 ms | English |
+| `small-q5_1` | 655 ms | 655 ms | English |
+| `tiny-q5_1` | 154 ms | 201 ms | Korean |
+| `base-q5_1` | 300 ms | 316 ms | Korean |
+| `small-q5_1` | 680 ms | 806 ms | Korean |
+
+**The cost barely moves with how much audio is in the buffer.** Whisper
+encodes a thirty-second window whatever you hand it, so two seconds of
+speech pays almost the same as eight. Anything that recognises a growing
+utterance repeatedly should budget per pass, not per second of audio.
+
+The same passes on Metal, `base-q5_1`, bounded to 400 frames: 23 ms at
+four seconds and 65 ms at eight, against 72 ms and 159 ms on the
+processor. Roughly three times, and the same shape.
+
+### Bounding the encoder, and the cliff under it
+
+`audio_ctx` bounds how much of that thirty-second window is encoded.
+Tightening it is most of what makes repeated recognition affordable —
+`base-q5_1` on four seconds of English went from 409 ms at the default
+to 72 ms, returning the same words.
+
+There is a floor, and it is sharper than it looks. A second of audio is
+worth fifty frames, so four seconds is worth two hundred — and two
+hundred is exactly where four seconds falls apart:
+
+| Audio | Bound | Cost | What came back |
+|---|---|---|---|
+| 4 s | 1500 (default) | 409 ms | "And so my fellow Americans ask" |
+| 4 s | 800 | 237 ms | same |
+| 4 s | 400 | 72 ms | same |
+| 4 s | 200 | 1.61 s | "and saw my fellow Americans ask" |
+| 4 s | 150 | 2.20 s | "and so my fellow Americans," five times over |
+| 8 s | 800 | 159 ms | "...ask not what your country can do for you." |
+| 8 s | 600 | 203 ms | same |
+| 8 s | 400 | 370 ms | the same sentence three times over |
+
+Below the floor it is **slower as well as worse**. That is the
+repetition collapse already described further down this file: whisper
+starts repeating itself, and whisper.cpp answers by decoding the window
+again at a higher temperature. Tightening too far buys nothing and costs
+twice.
+
+Korean behaved the same way with a little more room — four seconds held
+together at two hundred frames where English did not, and eight seconds
+was still clean at four hundred. Twice the audio's own frame count was
+safe everywhere it was tried, in both languages, at every buffer length.
+
+Read these for what they are. One host machine, one quantised model
+family, English from whisper.cpp's public sample and Korean synthesised
+by macOS. No device-class figure exists yet, and that is the one that
+decides whether any of this is affordable where it matters.
+
 ### The void reading
 
 | Machine | Build | Model | Audio | Decoding | Real-time factor |
@@ -106,6 +170,11 @@ for one that shares.
 The two reference machines named in the plan, every model size, Korean
 and English, each with the real-time factor, the time to first partial,
 and peak memory. The table stays honest by staying empty until then.
+
+The window-pass figures above have the same hole in them: they are the
+host, on the processor and on Metal, and say nothing about a board. The
+model sizes a server would run are not there either, because they are
+not on this machine.
 
 ## What the library promises about speed
 
