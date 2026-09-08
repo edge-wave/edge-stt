@@ -94,6 +94,70 @@ family, English from whisper.cpp's public sample and Korean synthesised
 by macOS. No device-class figure exists yet, and that is the one that
 decides whether any of this is affordable where it matters.
 
+### Window passes, Raspberry Pi 4, processor
+
+The same passes on the device this project targets. A Raspberry Pi 4
+Model B rev 1.4, four cores at 1.8 GHz, 4 GB, 64-bit Raspberry Pi OS.
+English, `probe_window`, no accelerator — there is none to ask for.
+
+At the library's default bound, four seconds buffered:
+
+| Model | Host | Device | Ratio |
+|---|---|---|---|
+| `tiny-q5_1` | 141 ms | 4.87 s | 35x |
+| `base-q5_1` | 245 ms | 13.4 s | 55x |
+| `small-q5_1` | 655 ms | 53.6 s | 80x, and throttled |
+
+Bounded to twice the audio's own frame count, which is the setting the
+section above says to use:
+
+| Model | Audio | Bound | Device | What came back |
+|---|---|---|---|---|
+| `base-q5_1` | 4 s | 1500 | 11.26 s | "And so my fellow Americans ask" |
+| `base-q5_1` | 4 s | 800 | 5.19 s | same |
+| `base-q5_1` | 4 s | 400 | 2.21 s | same |
+| `base-q5_1` | 4 s | 200 | 17.49 s | worse, and eight times slower |
+| `tiny-q5_1` | 4 s | 1500 | 6.35 s | "And so my fellow Americans! Ask!" |
+| `tiny-q5_1` | 4 s | 400 | 1.13 s | "And so my fellow Americans asked" |
+| `tiny-q5_1` | 4 s | 200 | 11.81 s | "...ask the soldiers", which nobody said |
+| `tiny-q5_1` | 2 s | 400 | 1.06 s | "and so my fellow Americans" |
+
+**The bound behaves identically on both machines.** The floor sits at
+the same place, the saving is the same four fifths, and the collapse
+below it is the same collapse — only the penalty is larger here, eight
+times rather than the twenty the host showed as a multiple of a much
+smaller number. Where to set the bound is a property of the model, not
+of the board, which is worth knowing: it can be decided once.
+
+**What the device costs is another matter.** A pass at the safe bound is
+1.1 s with the smallest model and 2.2 s with the one this project tells
+people to start with. Whatever recognises a growing utterance on this
+board produces an interim about once a second at best, and only with the
+smallest model. Read the ratios above rather than the host table when
+deciding whether that is enough.
+
+### Heat is not a footnote here
+
+One sweep — twenty-seven passes across three models — took the board
+from 61 to 84 degrees and into throttling:
+
+```
+before  temp=61.3'C  throttled=0x0       arm=1.8 GHz
+after   temp=83.7'C  throttled=0xe0008   arm=1.58 GHz
+```
+
+`0xe0008` is the soft temperature limit active now, with frequency
+capping and throttling recorded as having happened. The `small` figures
+above were taken inside that state, and drift within a single group
+shows it arriving: the same measurement repeated three times gave 48.7,
+51.0 and 52.0 seconds.
+
+This matters more for repeated recognition than for anything else this
+file measures. Decoding a finished utterance is a burst. Recognising a
+growing one is sustained load by definition, so throttling is not the
+exception there, it is the operating condition — and every device figure
+above is the optimistic end of what a long session would see.
+
 ### The void reading
 
 | Machine | Build | Model | Audio | Decoding | Real-time factor |
@@ -171,10 +235,11 @@ The two reference machines named in the plan, every model size, Korean
 and English, each with the real-time factor, the time to first partial,
 and peak memory. The table stays honest by staying empty until then.
 
-The window-pass figures above have the same hole in them: they are the
-host, on the processor and on Metal, and say nothing about a board. The
-model sizes a server would run are not there either, because they are
-not on this machine.
+The window-pass figures now cover both machines, but only in English and
+only for the three smallest models. Korean on the board is not measured,
+and neither is memory under several sessions at once. The model sizes a
+server would run are not there either, because neither machine has them
+on disk.
 
 ## What the library promises about speed
 
