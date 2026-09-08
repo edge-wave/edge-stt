@@ -28,6 +28,18 @@ impl Backend for FallbackBackend {
         }
     }
 
+    /// Either one may end up answering, so only what both can do can
+    /// be promised.
+    fn capabilities(&self) -> super::Capabilities {
+        let primary = self.primary.capabilities();
+        let local = self.local.capabilities();
+        super::Capabilities {
+            live_interims: primary.live_interims && local.live_interims,
+            revises: primary.revises && local.revises,
+            self_endpointing: primary.self_endpointing && local.self_endpointing,
+        }
+    }
+
     fn kind(&self) -> BackendKind {
         self.primary.kind()
     }

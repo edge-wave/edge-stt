@@ -213,6 +213,73 @@ impl fmt::Display for Language {
 
 /// Where a remote transcriber sends audio. There is no default
 /// endpoint, so a misconfigured build cannot reach a stranger.
+/// A third of a second: long enough that a pass is not started for
+/// every pushed chunk, short enough that text still looks live.
+pub const DEFAULT_INTERIM_MIN_INTERVAL: Duration = Duration::from_millis(300);
+
+/// Everything a continuous session is opened with. An `EndpointConfig`
+/// converts into one, so the call that opens a session today is
+/// unchanged and keeps behaving identically.
+#[derive(Debug, Clone)]
+pub struct SessionConfig {
+    pub endpointing: Option<crate::endpoint::EndpointConfig>,
+    pub live_interims: bool,
+    pub interim_min_interval: Duration,
+}
+
+impl SessionConfig {
+    pub fn new() -> Self {
+        Self {
+            endpointing: None,
+            live_interims: false,
+            interim_min_interval: DEFAULT_INTERIM_MIN_INTERVAL,
+        }
+    }
+
+    pub fn with_endpointing(mut self, endpointing: crate::endpoint::EndpointConfig) -> Self {
+        self.endpointing = Some(endpointing);
+        self
+    }
+
+    /// Asks for words while the speaker is still talking. Registering a
+    /// partial callback does not do this on its own, and must not.
+    pub fn with_live_interims(mut self) -> Self {
+        self.live_interims = true;
+        self
+    }
+
+    pub fn with_interim_min_interval(mut self, interval: Duration) -> Self {
+        self.interim_min_interval = interval;
+        self
+    }
+
+    pub fn check(&self) -> Result<()> {
+        if self.interim_min_interval.is_zero() {
+            return Err(Error::InvalidValue {
+                setting: "interim_min_interval",
+                expected: "greater than zero".to_string(),
+                got: "zero".to_string(),
+            });
+        }
+        match &self.endpointing {
+            Some(endpointing) => endpointing.check(),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Default for SessionConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<crate::endpoint::EndpointConfig> for SessionConfig {
+    fn from(endpointing: crate::endpoint::EndpointConfig) -> Self {
+        Self::new().with_endpointing(endpointing)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RemoteConfig {
     pub endpoint: String,

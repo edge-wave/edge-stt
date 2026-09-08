@@ -208,6 +208,12 @@ impl Backend for WhisperBackend {
         })
     }
 
+    /// Nothing yet: this decodes a complete utterance and says so. The
+    /// answer changes when something can recognise a growing one.
+    fn capabilities(&self) -> super::Capabilities {
+        super::Capabilities::default()
+    }
+
     fn kind(&self) -> BackendKind {
         BackendKind::Local
     }

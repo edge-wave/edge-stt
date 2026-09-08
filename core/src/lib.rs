@@ -8,6 +8,7 @@ pub mod cancel;
 pub mod config;
 pub mod endpoint;
 pub mod error;
+pub mod live;
 pub mod session;
 pub mod transcript;
 pub mod utterance;
@@ -16,8 +17,8 @@ pub mod wire;
 
 pub use cancel::CancelToken;
 pub use config::{
-    Accelerator, AudioFormat, BackendChoice, BackendKind, Config, Language, ModelSize, ModelSpec,
-    RemoteConfig, SampleType, Secret,
+    Accelerator, AudioFormat, BackendChoice, BackendKind, Config, DEFAULT_INTERIM_MIN_INTERVAL,
+    Language, ModelSize, ModelSpec, RemoteConfig, SampleType, Secret, SessionConfig,
 };
 pub use endpoint::EndpointConfig;
 pub use error::{Error, Result};
@@ -26,16 +27,12 @@ pub use transcript::{Partial, PartialKind, Segment, Transcript};
 pub use utterance::Utterance;
 
 use backend::{Backend, Work};
-#[cfg(feature = "streaming")]
-use session::SessionSlot;
 
 /// A built transcriber. Whether it decodes here or asks a server is
 /// settled by the configuration it was built with.
 pub struct EdgeStt {
     backend: Box<dyn Backend>,
     config: Config,
-    #[cfg(feature = "streaming")]
-    session_open: SessionSlot,
 }
 
 impl EdgeStt {
@@ -44,12 +41,7 @@ impl EdgeStt {
     pub fn new(config: Config) -> Result<Self> {
         config.check()?;
         let backend = build_backend(&config)?;
-        Ok(Self {
-            backend,
-            config,
-            #[cfg(feature = "streaming")]
-            session_open: SessionSlot::new(),
-        })
+        Ok(Self { backend, config })
     }
 
     pub fn backend_kind(&self) -> BackendKind {
@@ -78,24 +70,59 @@ impl EdgeStt {
     }
 
     /// Hands back a session that finds its own utterance boundaries in
-    /// pushed audio. At most one may be open at a time.
+    /// pushed audio. Each session owns its own state, so several may be
+    /// open at once against one loaded recognizer.
+    ///
+    /// Accepts an `EndpointConfig` exactly as it always has, and also a
+    /// `SessionConfig` for a caller who wants words while speech
+    /// continues.
     #[cfg(feature = "streaming")]
-    pub fn open_session(&self, config: EndpointConfig) -> Result<AudioSession<'_>> {
+    pub fn open_session(&self, config: impl Into<SessionConfig>) -> Result<AudioSession<'_>> {
+        let config = config.into();
         config.check()?;
-        let open_flag = self.session_open.claim()?;
-        let endpointer = endpoint::whisper_vad::WhisperVad::load(&config).inspect_err(|_| {
-            open_flag.store(false, std::sync::atomic::Ordering::Release);
-        })?;
+        let can = self.backend.capabilities();
+
+        if config.live_interims && !can.live_interims {
+            return Err(Error::InvalidValue {
+                setting: "live_interims",
+                expected: "a recognizer that can produce results while speech continues"
+                    .to_string(),
+                got: format!("{}, which cannot", self.backend.kind()),
+            });
+        }
+
+        let endpointer = match (&config.endpointing, can.self_endpointing) {
+            (Some(endpointing), _) => Some(Box::new(endpoint::whisper_vad::WhisperVad::load(
+                endpointing,
+            )?) as Box<dyn endpoint::Endpointer>),
+            (None, true) => None,
+            (None, false) => {
+                return Err(Error::InvalidValue {
+                    setting: "endpointing",
+                    expected: "a boundary-detection model, or a recognizer that finds its own \
+                               boundaries"
+                        .to_string(),
+                    got: "neither".to_string(),
+                });
+            }
+        };
+
+        let live = match config.live_interims {
+            true => Some(self.backend.open_live()?),
+            false => None,
+        };
+
         Ok(AudioSession::new(
             self,
-            Box::new(endpointer),
+            endpointer,
+            live,
+            &config,
             self.config.max_duration,
-            open_flag,
         ))
     }
 
     #[cfg(not(feature = "streaming"))]
-    pub fn open_session(&self, _config: EndpointConfig) -> Result<AudioSession<'_>> {
+    pub fn open_session(&self, _config: impl Into<SessionConfig>) -> Result<AudioSession<'_>> {
         Err(Error::BackendUnavailable {
             backend: "streaming",
         })
@@ -117,6 +144,18 @@ impl EdgeStt {
         work.timeout = self.config.timeout;
         work.on_partial = on_partial;
         self.backend.transcribe(utterance, &mut work)
+    }
+}
+
+#[cfg(test)]
+impl EdgeStt {
+    /// Wraps a backend handed over directly, so a test can exercise a
+    /// session without a model file anywhere on disk.
+    pub(crate) fn with_backend(backend: Box<dyn Backend>) -> Self {
+        Self {
+            backend,
+            config: Config::local(ModelSpec::at("not read")),
+        }
     }
 }
 

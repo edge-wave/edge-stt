@@ -53,10 +53,50 @@ impl<'p, 'c> Work<'p, 'c> {
     }
 }
 
+/// What a recognizer says about itself, so a session knows what it has
+/// to supply and a caller knows what it will receive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Capabilities {
+    /// It can produce results before an utterance has finished.
+    pub live_interims: bool,
+    /// A result it has already delivered may later be corrected.
+    pub revises: bool,
+    /// It decides where an utterance ends without a separate detector.
+    pub self_endpointing: bool,
+}
+
+/// One session's own recognition state. Never shared between sessions,
+/// which is what lets several run against one loaded recognizer.
+pub trait LiveDecoder: Send {
+    /// Given everything heard in this utterance so far -- not only the
+    /// newest audio -- the words for it, or `None` if there are none
+    /// worth delivering yet.
+    fn push(&mut self, utterance_so_far: &[i16]) -> Result<Option<String>>;
+
+    /// Forgets the utterance that just ended and starts the next clean.
+    fn reset(&mut self);
+}
+
 /// Shared rather than owned, so the server can serve several clients
 /// from one loaded model.
 pub trait Backend: Send + Sync {
     fn transcribe(&self, utterance: &Utterance<'_>, work: &mut Work<'_, '_>) -> Result<Transcript>;
 
     fn kind(&self) -> BackendKind;
+
+    /// Answering no to everything keeps a backend that never heard of
+    /// this behaving exactly as it does today.
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::default()
+    }
+
+    /// Only ever called after `capabilities` said it could; the default
+    /// exists so a backend that cannot does not have to say so twice.
+    fn open_live(&self) -> Result<Box<dyn LiveDecoder>> {
+        Err(crate::error::Error::InvalidValue {
+            setting: "live_interims",
+            expected: "a recognizer that can produce results while speech continues".to_string(),
+            got: format!("{}, which cannot", self.kind()),
+        })
+    }
 }

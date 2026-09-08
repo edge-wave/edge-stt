@@ -86,6 +86,12 @@ impl Backend for RemoteBackend {
         })
     }
 
+    /// Boundary detection runs here while the audio is decoded away,
+    /// so nothing local can produce words mid-utterance.
+    fn capabilities(&self) -> super::Capabilities {
+        super::Capabilities::default()
+    }
+
     fn kind(&self) -> BackendKind {
         BackendKind::Remote
     }
