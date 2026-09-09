@@ -32,8 +32,11 @@ pub struct AudioSession<'a> {
     /// continues, so a caller who did not pays nothing for this.
     live: Option<Box<dyn LiveDecoder>>,
     gate: InterimGate,
-    /// Everything heard in the utterance in progress. Kept only when a
-    /// live decoder needs it, since it needs the whole utterance.
+    /// Whether the caller asked to hear words during an utterance. A
+    /// decoder may be present without this, to find boundaries.
+    wants_interims: bool,
+    /// Everything heard in the utterance in progress. Kept whenever a
+    /// decoder is present, since it works on the whole utterance.
     utterance: Vec<i16>,
     seq: u32,
     max_duration: Duration,
@@ -58,6 +61,7 @@ impl<'a> AudioSession<'a> {
             endpointer,
             live,
             gate: InterimGate::new(config.interim_min_interval),
+            wants_interims: config.live_interims,
             utterance: Vec::new(),
             seq: 0,
             max_duration,
@@ -94,14 +98,19 @@ impl<'a> AudioSession<'a> {
             sink(partial);
         }
 
-        if let Some(endpointer) = self.endpointer.as_mut()
-            && let Some(finished) = endpointer.push(samples)?
-        {
+        if let Some(endpointer) = self.endpointer.as_mut() {
+            if let Some(finished) = endpointer.push(samples)? {
+                return self.finish(finished, on_partial).map(Some);
+            }
+        } else if let Some(at) = self.live.as_ref().and_then(|decoder| decoder.boundary()) {
+            let finished = self.utterance[..at.min(self.utterance.len())].to_vec();
             return self.finish(finished, on_partial).map(Some);
         }
 
+        // The same ceiling either way: one canonical "too long", not a
+        // second one for a recognizer that finds its own boundaries.
         if self.buffered >= self.max_duration
-            && let Some(finished) = self.endpointer.as_mut().and_then(|e| e.take_remainder())
+            && let Some(finished) = self.take_everything()
         {
             return self.finish(finished, on_partial).map(Some);
         }
@@ -123,9 +132,21 @@ impl<'a> AudioSession<'a> {
         }
         self.state = State::Closed;
 
-        match self.endpointer.as_mut().and_then(|e| e.take_remainder()) {
+        match self.take_everything() {
             Some(finished) => self.finish(finished, on_partial).map(Some),
             None => Ok(None),
+        }
+    }
+
+    /// Whatever is still buffered, from wherever it is held. A boundary
+    /// detector keeps it; without one the session does.
+    fn take_everything(&mut self) -> Option<Vec<i16>> {
+        match self.endpointer.as_mut() {
+            Some(endpointer) => endpointer.take_remainder(),
+            None => match self.utterance.is_empty() {
+                true => None,
+                false => Some(self.utterance.clone()),
+            },
         }
     }
 
@@ -141,12 +162,19 @@ impl<'a> AudioSession<'a> {
             utterance,
             gate,
             seq,
+            wants_interims,
             ..
         } = self;
 
         let Some(decoder) = live.as_mut() else {
             return Ok(None);
         };
+        if !*wants_interims {
+            // Still pushed, because a decoder that finds its own
+            // boundaries has to hear the audio to find them.
+            decoder.push(utterance)?;
+            return Ok(None);
+        }
         let heard = utterance.len();
         if !gate.due(heard) {
             return Ok(None);
@@ -206,10 +234,15 @@ mod tests {
     struct Scripted {
         lines: Vec<String>,
         at: usize,
+        /// Where this one says an utterance ends, for the kind that
+        /// decides that itself. Zero means it never does.
+        closes_at: usize,
+        heard: usize,
     }
 
     impl LiveDecoder for Scripted {
-        fn push(&mut self, _utterance_so_far: &[i16]) -> Result<Option<String>> {
+        fn push(&mut self, utterance_so_far: &[i16]) -> Result<Option<String>> {
+            self.heard = utterance_so_far.len();
             let line = self.lines.get(self.at).cloned();
             if line.is_some() {
                 self.at += 1;
@@ -219,12 +252,21 @@ mod tests {
 
         fn reset(&mut self) {
             self.at = 0;
+            self.heard = 0;
+        }
+
+        fn boundary(&self) -> Option<usize> {
+            match self.closes_at > 0 && self.heard >= self.closes_at {
+                true => Some(self.closes_at),
+                false => None,
+            }
         }
     }
 
     struct Fake {
         can: Capabilities,
         lines: Vec<String>,
+        closes_at: usize,
     }
 
     impl Backend for Fake {
@@ -249,6 +291,8 @@ mod tests {
             Ok(Box::new(Scripted {
                 lines: self.lines.clone(),
                 at: 0,
+                closes_at: self.closes_at,
+                heard: 0,
             }))
         }
     }
@@ -261,6 +305,21 @@ mod tests {
                 self_endpointing: true,
             },
             lines: lines.iter().map(|line| line.to_string()).collect(),
+            closes_at: 0,
+        }))
+    }
+
+    /// One that ends an utterance after `closes_at` samples of its own
+    /// accord, needing no boundary detector beside it.
+    fn self_endpointing(closes_at: usize) -> EdgeStt {
+        EdgeStt::with_backend(Box::new(Fake {
+            can: Capabilities {
+                live_interims: true,
+                revises: true,
+                self_endpointing: true,
+            },
+            lines: vec!["and so".to_string()],
+            closes_at,
         }))
     }
 
@@ -268,6 +327,7 @@ mod tests {
         EdgeStt::with_backend(Box::new(Fake {
             can: Capabilities::default(),
             lines: Vec::new(),
+            closes_at: 0,
         }))
     }
 
@@ -383,6 +443,45 @@ mod tests {
         let one = stt.open_session(SessionConfig::new());
         let two = stt.open_session(SessionConfig::new());
         assert!(one.is_ok() && two.is_ok(), "a second session was refused");
+    }
+
+    #[test]
+    fn a_recognizer_that_endpoints_itself_needs_no_detector() {
+        let stt = self_endpointing(3_200);
+        let mut session = stt
+            .open_session(SessionConfig::new())
+            .expect("no detector should be needed");
+
+        let mut finished = 0;
+        for _ in 0..4 {
+            if session.push(&quiet(1_600), None).expect("a push").is_some() {
+                finished += 1;
+            }
+        }
+        assert_eq!(finished, 2, "expected one utterance per two pushes");
+    }
+
+    #[test]
+    fn the_same_ceiling_holds_without_a_detector() {
+        let stt = self_endpointing(0);
+        let mut session = stt
+            .open_session(SessionConfig::new())
+            .expect("no detector should be needed");
+
+        // Never closed by the recogniser, so only the ceiling can end
+        // it -- fed as a caller would, or the utterance would be over
+        // the limit before anything got the chance to close it.
+        let mut closed_after = None;
+        for pushed in 1..=4_000 {
+            if session.push(&quiet(1_600), None).expect("a push").is_some() {
+                closed_after = Some(pushed);
+                break;
+            }
+        }
+        let closed_after = closed_after.expect("the maximum duration did not close it");
+        // The default ceiling is five minutes, and a push is a tenth of
+        // a second, so it should land there rather than anywhere else.
+        assert_eq!(closed_after, 3_000);
     }
 
     #[test]

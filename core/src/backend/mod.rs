@@ -75,6 +75,14 @@ pub trait LiveDecoder: Send {
 
     /// Forgets the utterance that just ended and starts the next clean.
     fn reset(&mut self);
+
+    /// How much of the audio pushed so far belongs to a finished
+    /// utterance, for a recognizer that decides that itself. `None`
+    /// from one that leaves the question to a boundary detector, which
+    /// is every recognizer shipped today.
+    fn boundary(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// Shared rather than owned, so the server can serve several clients
