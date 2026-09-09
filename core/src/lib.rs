@@ -107,7 +107,10 @@ impl EdgeStt {
             }
         };
 
-        let live = match config.live_interims {
+        // Opened for boundaries as well as for early words: a
+        // recognizer that endpoints itself has to hear the audio to do
+        // it, whether or not anyone asked to hear it early.
+        let live = match config.live_interims || endpointer.is_none() {
             true => Some(self.backend.open_live()?),
             false => None,
         };
