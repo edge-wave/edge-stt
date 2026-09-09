@@ -28,6 +28,9 @@ jobs:
       # toolchains no runner here has.
       - run: cargo clippy --workspace --all-targets --features full -- -D warnings
       - run: cargo test --workspace --features full
+      # The shape an embedder gets by default, with neither optional
+      # capability on. What is promised to them is that nothing moves.
+      - run: cargo test --workspace
 
   streaming:
     runs-on: ubuntu-latest

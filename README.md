@@ -90,6 +90,48 @@ the risk of splitting a natural mid-sentence pause; the default is a
 few seconds, the same order of magnitude edge-ear uses for its own
 end-of-speech detection.
 
+### Words while the speaker is still talking
+
+Nothing above reaches a caller until the speaker stops. Ask for interim
+results during an utterance and words arrive as they are said, each one
+carrying everything heard so far:
+
+```rust
+use edge_stt_core::{PartialKind, SessionConfig};
+
+let mut session = stt.open_session(
+    SessionConfig::new()
+        .with_endpointing(EndpointConfig::new("models/ggml-silero-v5.1.2.bin"))
+        .with_live_interims(),
+)?;
+
+let mut caption = String::new();
+let mut show = |partial: edge_stt_core::Partial| match partial.kind {
+    PartialKind::Replace => caption = partial.text,
+    PartialKind::Append => caption.push_str(&partial.text),
+};
+if let Some(transcript) = session.push(chunk, Some(&mut show))? {
+    println!("{}", transcript.text); // the answer, from the whole utterance
+}
+```
+
+**Read `kind` rather than assuming.** A recognizer working on an
+unfinished utterance corrects itself as more audio arrives, so its
+results *replace* what came before instead of adding to it. The finished
+utterance is still recognised in full, and that is where the
+`Transcript` comes from — an interim is never promoted, and never a
+commitment.
+
+**It is not free, which is why it is asked for separately.** Recognising
+a growing utterance means recognising it again and again; registering a
+callback does not turn this on by itself, so a caller who never asked
+pays nothing. Two conditions bound the cost: an interim is delivered
+only when the words changed, and no sooner than
+`with_interim_min_interval` allows — a third of a second by default.
+What that buys you depends entirely on the machine, and
+[measurements.md](docs/measurements.md) has figures for both ends of the
+range this project targets.
+
 ## The server
 
 The other end of the remote backend, in this repository, running the

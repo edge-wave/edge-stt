@@ -61,6 +61,30 @@ How much memory each needs while decoding is not quoted here, because
 this project has not measured it. [measurements.md](measurements.md)
 says what has been taken and what has not.
 
+## What these can do while someone is still speaking
+
+A session can ask for words during an utterance rather than only after
+it. What arrives depends on the model, so it says what it can do and
+the session refuses at setup rather than disappointing you later.
+
+| | Every Whisper file above |
+|---|---|
+| Words during an utterance | Yes, by being re-run over what has been heard so far |
+| Corrects what it already said | Yes — interim results replace, they do not append |
+| Finds its own utterance boundaries | **No.** The Silero VAD file is still required |
+
+Nothing here endpoints itself. That is a property of the streaming
+families of models, which this project does not ship, and the reason a
+session can be opened without a boundary-detection model at all is that
+one of those can be plugged in later without changing anything you
+write today.
+
+The cost of the first row is real: recognising a growing utterance
+means recognising it repeatedly. On a desktop machine a pass is under a
+tenth of a second with `base-q5_1`; on a Raspberry Pi 4 the same pass is
+over two seconds, and only `tiny-q5_1` is arguable at all.
+[measurements.md](measurements.md) has the figures and the reasoning.
+
 ## Quantisation
 
 Every model the record pins is quantised except the last two. `q5_1` and
