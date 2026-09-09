@@ -54,6 +54,12 @@ pub enum ClientMessage {
         want_partials: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         pause_tolerance_ms: Option<u64>,
+        /// Words while the speaker is still talking. Absent means no,
+        /// so a client written before this existed is unaffected.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        live_interims: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        interim_min_interval_ms: Option<u64>,
     },
     /// Clean shutdown of a continuous session: finalizes whatever
     /// utterance was in progress before the connection may close.

@@ -80,7 +80,7 @@ pub enum ContinuousEvent {
 /// without `close()`, discarding anything still in progress.
 pub fn spawn_continuous(
     stt: std::sync::Arc<edge_stt_core::EdgeStt>,
-    config: edge_stt_core::EndpointConfig,
+    config: edge_stt_core::SessionConfig,
     want_partials: bool,
 ) -> (
     tokio::sync::mpsc::UnboundedSender<AudioInput>,

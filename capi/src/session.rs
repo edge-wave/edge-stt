@@ -5,7 +5,7 @@ use std::ffi::{c_char, c_void};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use edge_stt_core::{EdgeStt, EndpointConfig, Partial, Transcript};
+use edge_stt_core::{EdgeStt, EndpointConfig, Partial, SessionConfig, Transcript};
 
 use crate::convert::{edge_stt_transcript_h, edge_stt_transcript_handle, required_str};
 use crate::error::*;
@@ -49,27 +49,97 @@ macro_rules! with_session {
     }};
 }
 
+/// The loaded core behind a handle, as a reference a session can hold.
+///
+/// SAFETY: it points into the Box `stt` owns, heap-stable for the
+/// handle's lifetime. Sound as long as the caller keeps `stt` alive --
+/// and calls neither edge_stt_load_model nor edge_stt_free on it --
+/// while a session stays open (see edge_stt_session_free).
+fn borrow_core(parent: &crate::edge_stt_handle) -> Option<&'static EdgeStt> {
+    let guard = core_guard(parent);
+    let Some(core) = guard.as_ref() else {
+        fail_with(
+            edge_stt_error::EDGE_STT_NO_MODEL,
+            "load a model before opening a session",
+        );
+        return None;
+    };
+    Some(unsafe { &*(core as *const EdgeStt) })
+}
+
+/// What a session is opened with.
+///
+/// `struct_size` must be set to `sizeof(edge_stt_session_opts)`. It is
+/// what lets fields be added later without breaking a program built
+/// against an older header: anything this build does not recognise is
+/// ignored, and anything the caller did not supply keeps its default.
+#[repr(C)]
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy)]
+pub struct edge_stt_session_opts {
+    /// sizeof(edge_stt_session_opts), as the caller compiled it.
+    pub struct_size: usize,
+    /// A ggml VAD file -- a second, separate model from the one
+    /// edge_stt_load_model loaded. NULL only where the model finds its
+    /// own utterance boundaries.
+    pub vad_model: *const c_char,
+    /// How long a pause must last before an utterance is considered
+    /// finished, or zero for the documented default.
+    pub pause_tolerance_ms: u64,
+    /// Non-zero to also deliver words while the speaker is still
+    /// talking. Those cost repeated recognition, which is why asking
+    /// for them is separate from registering a callback.
+    pub live_interims: i32,
+    /// The shortest gap between two delivered interim results, or zero
+    /// for the documented default.
+    pub interim_min_interval_ms: u64,
+}
+
+/// Reads as much of `opts` as both sides know about, leaving the rest
+/// at its default. `struct_size` comes first so it can always be read.
+unsafe fn read_opts(opts: *const edge_stt_session_opts) -> Option<edge_stt_session_opts> {
+    let declared = unsafe { std::ptr::read_unaligned(opts.cast::<usize>()) };
+    if declared < std::mem::size_of::<usize>() {
+        fail_with(
+            edge_stt_error::EDGE_STT_INVALID_VALUE,
+            "set struct_size to sizeof(edge_stt_session_opts)",
+        );
+        return None;
+    }
+
+    let mut taken = edge_stt_session_opts {
+        struct_size: 0,
+        vad_model: std::ptr::null(),
+        pause_tolerance_ms: 0,
+        live_interims: 0,
+        interim_min_interval_ms: 0,
+    };
+    let take = declared.min(std::mem::size_of::<edge_stt_session_opts>());
+    unsafe {
+        std::ptr::copy_nonoverlapping(opts.cast::<u8>(), (&raw mut taken).cast::<u8>(), take);
+    }
+    Some(taken)
+}
+
 /// @brief Open a continuous session: push samples as they arrive
 ///        instead of handing over one complete recording.
 ///
-/// The parent handle must stay alive, with a model loaded, for as
-/// long as the session stays open. Only one session may be open on a
-/// handle at a time.
+/// The parent handle must stay alive, with a model loaded, for as long
+/// as the session stays open. Several sessions may be open on one
+/// handle; each has its own state and none can see another's. Zero the
+/// options, set `struct_size` and whatever else you need, and anything
+/// left alone takes its documented default.
 ///
 /// @param[in] stt the handle, with a model loaded
-/// @param[in] vad_model a ggml VAD file -- a second, separate model
-///            from the one edge_stt_load_model loaded
-/// @param[in] pause_tolerance_ms how long a pause must last before an
-///            utterance is considered finished, or zero for the
-///            documented default
+/// @param[in] opts what to open the session with
 /// @return The handle, or NULL on failure --
-///         edge_stt_get_last_error() says why.
+///         edge_stt_get_last_error() says why, including asking for
+///         words mid-utterance from a model that cannot produce them.
 /// @see edge_stt_session_push, edge_stt_session_close, edge_stt_session_free
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn edge_stt_session_new(
     stt: edge_stt_h,
-    vad_model: *const c_char,
-    pause_tolerance_ms: u64,
+    opts: *const edge_stt_session_opts,
 ) -> edge_stt_session_h {
     if stt.is_null() {
         fail_with(
@@ -78,33 +148,48 @@ pub unsafe extern "C" fn edge_stt_session_new(
         );
         return std::ptr::null_mut();
     }
-    let parent = unsafe { &*stt };
-
-    let vad_model = match required_str(vad_model, "vad_model") {
-        Ok(path) => path,
-        Err(_) => return std::ptr::null_mut(),
-    };
-
-    let guard = core_guard(parent);
-    let Some(core) = guard.as_ref() else {
+    if opts.is_null() {
         fail_with(
-            edge_stt_error::EDGE_STT_NO_MODEL,
-            "load a model before opening a session",
+            edge_stt_error::EDGE_STT_NULL_ARGUMENT,
+            "the options must not be null",
         );
         return std::ptr::null_mut();
+    }
+    let parent = unsafe { &*stt };
+    let Some(opts) = (unsafe { read_opts(opts) }) else {
+        return std::ptr::null_mut();
     };
-    // SAFETY: `core` points into the Box `stt` owns, heap-stable for
-    // the handle's lifetime. Sound as long as the caller keeps `stt`
-    // alive -- and does not call edge_stt_load_model or edge_stt_free
-    // on it -- while this session stays open (see edge_stt_session_free).
-    let core: &'static EdgeStt = unsafe { &*(core as *const EdgeStt) };
-    drop(guard);
 
-    let mut config = EndpointConfig::new(vad_model);
-    if pause_tolerance_ms > 0 {
-        config = config.with_pause_tolerance(Duration::from_millis(pause_tolerance_ms));
+    let mut config = SessionConfig::new();
+    if !opts.vad_model.is_null() {
+        let vad_model = match required_str(opts.vad_model, "vad_model") {
+            Ok(path) => path,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        let mut endpointing = EndpointConfig::new(vad_model);
+        if opts.pause_tolerance_ms > 0 {
+            endpointing =
+                endpointing.with_pause_tolerance(Duration::from_millis(opts.pause_tolerance_ms));
+        }
+        config = config.with_endpointing(endpointing);
+    }
+    if opts.live_interims != 0 {
+        config = config.with_live_interims();
+    }
+    if opts.interim_min_interval_ms > 0 {
+        config =
+            config.with_interim_min_interval(Duration::from_millis(opts.interim_min_interval_ms));
     }
 
+    let Some(core) = borrow_core(parent) else {
+        return std::ptr::null_mut();
+    };
+    open(core, config)
+}
+
+/// Kept apart from the opener so that how a session is built and how
+/// a failure is reported stay in one place.
+fn open(core: &'static EdgeStt, config: SessionConfig) -> edge_stt_session_h {
     match core.open_session(config) {
         Ok(session) => Box::into_raw(Box::new(edge_stt_session_handle {
             session: Mutex::new(session),
