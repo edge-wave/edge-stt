@@ -60,6 +60,31 @@ fn the_continuous_example(
     Ok(())
 }
 
+#[allow(dead_code)]
+#[cfg(feature = "streaming")]
+fn the_live_interims_example(
+    stt: &edge_stt_core::EdgeStt,
+    chunk: &[i16],
+) -> edge_stt_core::Result<()> {
+    use edge_stt_core::{EndpointConfig, PartialKind, SessionConfig};
+
+    let mut session = stt.open_session(
+        SessionConfig::new()
+            .with_endpointing(EndpointConfig::new("models/ggml-silero-v5.1.2.bin"))
+            .with_live_interims(),
+    )?;
+
+    let mut caption = String::new();
+    let mut show = |partial: edge_stt_core::Partial| match partial.kind {
+        PartialKind::Replace => caption = partial.text,
+        PartialKind::Append => caption.push_str(&partial.text),
+    };
+    if let Some(transcript) = session.push(chunk, Some(&mut show))? {
+        println!("{}", transcript.text);
+    }
+    Ok(())
+}
+
 #[test]
 fn the_examples_above_are_the_ones_the_readme_shows() {
     let readme = readme();
@@ -71,6 +96,9 @@ fn the_examples_above_are_the_ones_the_readme_shows() {
         "let mut session = stt.open_session(EndpointConfig::new(\"models/ggml-silero-v5.1.2.bin\"))?;",
         "if let Some(transcript) = session.push(chunk, None)? {",
         "if let Some(transcript) = session.close(None)? {",
+        "        .with_live_interims(),",
+        "    PartialKind::Replace => caption = partial.text,",
+        "if let Some(transcript) = session.push(chunk, Some(&mut show))? {",
     ] {
         assert!(
             readme.contains(line),
