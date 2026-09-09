@@ -102,11 +102,11 @@ impl LiveDecoder for WhisperWindow {
         }
 
         let text: String = decoded.segments.iter().map(|s| s.text.as_str()).collect();
-        let text = text.trim().to_string();
+        let text = settled(text.trim());
         if text.is_empty() {
             return Ok(None);
         }
-        Ok(Some(text))
+        Ok(Some(text.to_string()))
     }
 
     fn reset(&mut self) {
@@ -114,10 +114,22 @@ impl LiveDecoder for WhisperWindow {
     }
 }
 
+/// The closing word is cut wherever the buffer ends, so it is held back
+/// until a later pass hears past it. Timing cannot find it: a short
+/// buffer comes back as one segment whose end is the cut itself.
+pub fn settled(text: &str) -> &str {
+    // Nothing to hold back: one word is either the whole hypothesis or
+    // a script that does not put spaces between them.
+    match text.rsplit_once(char::is_whitespace) {
+        Some((kept, _)) => kept.trim_end(),
+        None => text,
+    }
+}
+
 /// How much of the thirty-second canvas to encode for this much audio.
 /// Half of it is deliberately left as margin: with none the recogniser
 /// leaves the shape it was trained on and starts repeating itself.
-fn bound_for(samples: usize) -> i32 {
+pub fn bound_for(samples: usize) -> i32 {
     let positions = (samples.saturating_mul(POSITIONS_PER_SECOND) / SAMPLE_RATE) as i32;
     positions.clamp(NARROWEST, WIDEST)
 }
@@ -130,6 +142,23 @@ mod tests {
     fn the_bound_leaves_half_the_canvas_as_margin() {
         assert_eq!(bound_for(4 * SAMPLE_RATE), 400);
         assert_eq!(bound_for(8 * SAMPLE_RATE), 800);
+    }
+
+    #[test]
+    fn the_word_the_buffer_cut_is_not_shown() {
+        assert_eq!(
+            settled("And so my fellow Americans ask"),
+            "And so my fellow Americans"
+        );
+        assert_eq!(settled("오늘 날씨가 아주 맑고 정"), "오늘 날씨가 아주 맑고");
+    }
+
+    /// A hypothesis of one word is either all there is or a script that
+    /// writes without spaces, and holding either back says nothing.
+    #[test]
+    fn a_single_word_is_shown_as_it_is() {
+        assert_eq!(settled("안녕하세요"), "안녕하세요");
+        assert_eq!(settled(""), "");
     }
 
     #[test]
