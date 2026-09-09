@@ -24,17 +24,24 @@ impl Running {
 /// No model is loaded unless a test asks for one, so most of the
 /// protocol can be checked without waiting on whisper.cpp.
 pub async fn start(credential: Option<&str>, capacity: usize) -> Running {
-    start_with(credential, capacity, None, None).await
+    start_with(credential, capacity, None, None, None).await
 }
 
 /// Loads a real model in the background and waits for it, plus a VAD
 /// model, for tests that need continuous sessions to actually decode.
 pub async fn start_streaming(capacity: usize) -> Running {
+    start_streaming_with_threads(capacity, None).await
+}
+
+/// The same, with a cap on what one recognition may take, which is
+/// what a server serving several live sessions at once needs.
+pub async fn start_streaming_with_threads(capacity: usize, threads: Option<u16>) -> Running {
     let running = start_with(
         None,
         capacity,
         Some(model_path_env()),
         Some(vad_model_path_env()),
+        threads,
     )
     .await;
     while !running.server.readiness.is_ready() {
@@ -92,13 +99,13 @@ async fn start_with(
     capacity: usize,
     model: Option<std::path::PathBuf>,
     vad_model: Option<std::path::PathBuf>,
+    threads: Option<u16>,
 ) -> Running {
-    let server = Arc::new(Server::new(
-        credential.map(str::to_string),
-        None,
-        capacity,
-        vad_model,
-    ));
+    let mut server = Server::new(credential.map(str::to_string), None, capacity, vad_model);
+    if let Some(threads) = threads {
+        server = server.with_threads(threads);
+    }
+    let server = Arc::new(server);
     if let Some(model) = &model {
         server.load_model_in_background(model);
     }

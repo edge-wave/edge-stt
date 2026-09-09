@@ -29,6 +29,11 @@ struct Args {
     #[arg(long, default_value_t = 8)]
     capacity: usize,
 
+    /// How many threads one recognition may use. Left unset every
+    /// session takes every core, so two live callers fight over each.
+    #[arg(long)]
+    threads: Option<u16>,
+
     /// Force a language instead of detecting one.
     #[arg(long)]
     language: Option<String>,
@@ -53,12 +58,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let server = Arc::new(Server::new(
+    let mut server = Server::new(
         credential,
         args.language.clone(),
         args.capacity,
         args.vad_model.clone(),
-    ));
+    );
+    if let Some(threads) = args.threads {
+        server = server.with_threads(threads);
+    } else if args.vad_model.is_some() {
+        log::warn!(
+            "no --threads: each session recognises on every core, which serves one live caller well and several badly"
+        );
+    }
+    let server = Arc::new(server);
     server.load_model_in_background(&args.model);
 
     let address: SocketAddr = args.bind.parse()?;

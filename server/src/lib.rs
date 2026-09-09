@@ -28,6 +28,9 @@ pub struct Server {
     /// Needed only for continuous (open_stream) sessions; absent means
     /// this server refuses them rather than guessing a default.
     pub vad_model: Option<std::path::PathBuf>,
+    /// How many threads one recognition may use. Every session decodes
+    /// with this, so it is what stops live callers oversubscribing.
+    pub threads: Option<u16>,
 }
 
 impl Server {
@@ -44,7 +47,15 @@ impl Server {
             capacity: Capacity::new(capacity),
             readiness: Readiness::default(),
             vad_model,
+            threads: None,
         }
+    }
+
+    /// Caps what one recognition takes, so a machine serving several
+    /// live sessions divides its cores instead of contending for them.
+    pub fn with_threads(mut self, threads: u16) -> Self {
+        self.threads = Some(threads);
+        self
     }
 
     pub fn transcriber(&self) -> Option<Arc<EdgeStt>> {
@@ -57,7 +68,11 @@ impl Server {
         let server = Arc::clone(self);
         let model = model.to_path_buf();
         tokio::task::spawn_blocking(move || {
-            let mut config = Config::local(ModelSpec::at(&model));
+            let mut spec = ModelSpec::at(&model);
+            if let Some(threads) = server.threads {
+                spec = spec.with_threads(threads);
+            }
+            let mut config = Config::local(spec);
             if let Some(tag) = server.language.clone() {
                 config = config.with_language(Language::new(tag));
             }
