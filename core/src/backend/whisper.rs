@@ -48,6 +48,9 @@ pub fn route_logs() {
 pub struct WindowPass {
     pub text: String,
     pub took: Duration,
+    /// Carried whole because where a pass ends decides whether the
+    /// fragment at its trailing edge can be trimmed by timing at all.
+    pub segments: Vec<crate::transcript::Segment>,
 }
 
 impl WhisperBackend {
@@ -104,7 +107,12 @@ impl WhisperBackend {
 
     /// Recognises a partial utterance once, bounding the encoder to
     /// `audio_ctx` frames; zero leaves whisper.cpp's own default.
-    pub fn probe_window(&self, samples: &[i16], audio_ctx: i32) -> Result<WindowPass> {
+    pub fn probe_window(
+        &self,
+        samples: &[i16],
+        audio_ctx: i32,
+        prompt: Option<&str>,
+    ) -> Result<WindowPass> {
         let mut audio = vec![0.0f32; samples.len()];
         convert_integer_to_float_audio(samples, &mut audio).map_err(|why| Error::InvalidValue {
             setting: "samples",
@@ -130,6 +138,11 @@ impl WhisperBackend {
         if audio_ctx > 0 {
             params.set_audio_ctx(audio_ctx);
         }
+        // Null bytes would panic inside the library, and text a pass
+        // produced is the only thing this is ever handed.
+        if let Some(prompt) = prompt.filter(|p| !p.contains('\0')) {
+            params.set_initial_prompt(prompt);
+        }
 
         let started = Instant::now();
         state
@@ -145,6 +158,7 @@ impl WhisperBackend {
         Ok(WindowPass {
             text: text.trim().to_string(),
             took,
+            segments: decoded.segments,
         })
     }
 
