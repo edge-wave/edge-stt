@@ -188,6 +188,43 @@ typedef edge_stt_transcript_handle *edge_stt_transcript_h;
 typedef edge_stt_session_handle *edge_stt_session_h;
 
 /**
+ * What a session is opened with.
+ *
+ * `struct_size` must be set to `sizeof(edge_stt_session_opts)`. It is
+ * what lets fields be added later without breaking a program built
+ * against an older header: anything this build does not recognise is
+ * ignored, and anything the caller did not supply keeps its default.
+ */
+typedef struct {
+    /**
+     * sizeof(edge_stt_session_opts), as the caller compiled it.
+     */
+    uintptr_t struct_size;
+    /**
+     * A ggml VAD file -- a second, separate model from the one
+     * edge_stt_load_model loaded. NULL only where the model finds its
+     * own utterance boundaries.
+     */
+    const char *vad_model;
+    /**
+     * How long a pause must last before an utterance is considered
+     * finished, or zero for the documented default.
+     */
+    uint64_t pause_tolerance_ms;
+    /**
+     * Non-zero to also deliver words while the speaker is still
+     * talking. Those cost repeated recognition, which is why asking
+     * for them is separate from registering a callback.
+     */
+    int32_t live_interims;
+    /**
+     * The shortest gap between two delivered interim results, or zero
+     * for the documented default.
+     */
+    uint64_t interim_min_interval_ms;
+} edge_stt_session_opts;
+
+/**
  * Owns the transcript it is handed; free it with
  * edge_stt_transcript_free once done with it.
  */
@@ -389,23 +426,20 @@ void edge_stt_transcript_free(edge_stt_transcript_h transcript);
  * @brief Open a continuous session: push samples as they arrive
  *        instead of handing over one complete recording.
  *
- * The parent handle must stay alive, with a model loaded, for as
- * long as the session stays open. Only one session may be open on a
- * handle at a time.
+ * The parent handle must stay alive, with a model loaded, for as long
+ * as the session stays open. Several sessions may be open on one
+ * handle; each has its own state and none can see another's. Zero the
+ * options, set `struct_size` and whatever else you need, and anything
+ * left alone takes its documented default.
  *
  * @param[in] stt the handle, with a model loaded
- * @param[in] vad_model a ggml VAD file -- a second, separate model
- *            from the one edge_stt_load_model loaded
- * @param[in] pause_tolerance_ms how long a pause must last before an
- *            utterance is considered finished, or zero for the
- *            documented default
+ * @param[in] opts what to open the session with
  * @return The handle, or NULL on failure --
- *         edge_stt_get_last_error() says why.
+ *         edge_stt_get_last_error() says why, including asking for
+ *         words mid-utterance from a model that cannot produce them.
  * @see edge_stt_session_push, edge_stt_session_close, edge_stt_session_free
  */
-edge_stt_session_h edge_stt_session_new(edge_stt_h stt,
-                                        const char *vad_model,
-                                        uint64_t pause_tolerance_ms);
+edge_stt_session_h edge_stt_session_new(edge_stt_h stt, const edge_stt_session_opts *opts);
 
 /**
  * @brief Ask to be told about words as they are decoded, for this

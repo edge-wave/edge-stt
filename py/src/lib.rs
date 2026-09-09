@@ -393,12 +393,33 @@ impl PyEdgeStt {
     }
 
     /// Opens a continuous session against a second, separate VAD
-    /// model file -- push samples to it as they arrive.
-    #[pyo3(signature = (vad_model, pause_tolerance = None))]
-    fn open_session(&self, vad_model: &str, pause_tolerance: Option<f64>) -> PyResult<PySession> {
-        let mut config = edge_stt_core::EndpointConfig::new(vad_model);
+    /// model file -- push samples to it as they arrive. Ask for
+    /// `live_interims` to also hear words while the speaker is still
+    /// talking, which costs repeated recognition and so is not implied
+    /// by passing a callback.
+    #[pyo3(signature = (
+        vad_model,
+        pause_tolerance = None,
+        live_interims = false,
+        interim_min_interval = None,
+    ))]
+    fn open_session(
+        &self,
+        vad_model: &str,
+        pause_tolerance: Option<f64>,
+        live_interims: bool,
+        interim_min_interval: Option<f64>,
+    ) -> PyResult<PySession> {
+        let mut endpointing = edge_stt_core::EndpointConfig::new(vad_model);
         if let Some(seconds) = pause_tolerance {
-            config = config.with_pause_tolerance(Duration::from_secs_f64(seconds));
+            endpointing = endpointing.with_pause_tolerance(Duration::from_secs_f64(seconds));
+        }
+        let mut config = edge_stt_core::SessionConfig::new().with_endpointing(endpointing);
+        if live_interims {
+            config = config.with_live_interims();
+        }
+        if let Some(seconds) = interim_min_interval {
+            config = config.with_interim_min_interval(Duration::from_secs_f64(seconds));
         }
         // SAFETY: `_core` below is a clone of `self.core`, keeping the
         // `EdgeStt` this borrows from alive for as long as the session

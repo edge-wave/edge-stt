@@ -68,7 +68,13 @@ int main(void) {
     edge_stt_session_free(NULL);
 
     /* Opening a session before a model is loaded says exactly that. */
-    CHECK(edge_stt_session_new(stt, "/no/such/vad.bin", 0) == NULL);
+    edge_stt_session_opts missing_vad = {0};
+    missing_vad.struct_size = sizeof(missing_vad);
+    missing_vad.vad_model = "/no/such/vad.bin";
+    CHECK(edge_stt_session_new(stt, &missing_vad) == NULL);
+    CHECK(edge_stt_session_new(stt, NULL) == NULL);
+    edge_stt_session_opts unsized = {0};
+    CHECK(edge_stt_session_new(stt, &unsized) == NULL);
     CHECK(strlen(edge_stt_get_last_error()) > 0);
 
     edge_stt_free(stt);

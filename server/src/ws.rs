@@ -71,6 +71,8 @@ async fn serve(mut socket: WebSocket, server: Arc<Server>) {
                         language,
                         want_partials,
                         pause_tolerance_ms,
+                        live_interims,
+                        interim_min_interval_ms,
                     } => {
                         if format != edge_stt_core::wire::WireFormat::mono_16k() {
                             let refusal = error_message(
@@ -81,13 +83,28 @@ async fn serve(mut socket: WebSocket, server: Arc<Server>) {
                             let _ = send(&mut socket, refusal).await;
                             return;
                         }
+                        // Producing words the client has said not to
+                        // send is work nobody would ever see.
+                        if live_interims && !want_partials {
+                            let refusal = error_message(
+                                &request_id,
+                                "invalid_request",
+                                "live_interims needs want_partials, or nothing would be sent",
+                            );
+                            let _ = send(&mut socket, refusal).await;
+                            return;
+                        }
                         run_continuous(
                             &mut socket,
                             &server,
-                            request_id,
-                            language,
-                            want_partials,
-                            pause_tolerance_ms,
+                            StreamRequest {
+                                request_id,
+                                language,
+                                want_partials,
+                                pause_tolerance_ms,
+                                live_interims,
+                                interim_min_interval_ms,
+                            },
                         )
                         .await;
                         return;
@@ -232,14 +249,25 @@ async fn run(socket: &mut WebSocket, server: &Arc<Server>, mut session: Session)
 /// Continuous input: audio arrives with no predetermined end, and the
 /// server -- not the caller -- decides utterance boundaries, sending
 /// `final` once per one it finds until `close_stream` or a disconnect.
-async fn run_continuous(
-    socket: &mut WebSocket,
-    server: &Arc<Server>,
+/// What a client asked for when it opened a stream.
+struct StreamRequest {
     request_id: String,
     language: Option<String>,
     want_partials: bool,
     pause_tolerance_ms: Option<u64>,
-) {
+    live_interims: bool,
+    interim_min_interval_ms: Option<u64>,
+}
+
+async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: StreamRequest) {
+    let StreamRequest {
+        request_id,
+        language,
+        want_partials,
+        pause_tolerance_ms,
+        live_interims,
+        interim_min_interval_ms,
+    } = request;
     let Some(stt) = server.transcriber() else {
         let refusal = error_message(
             &request_id,
@@ -305,9 +333,16 @@ async fn run_continuous(
         }
     };
 
-    let mut config = edge_stt_core::EndpointConfig::new(&vad_model);
+    let mut endpointing = edge_stt_core::EndpointConfig::new(&vad_model);
     if let Some(ms) = pause_tolerance_ms {
-        config = config.with_pause_tolerance(std::time::Duration::from_millis(ms));
+        endpointing = endpointing.with_pause_tolerance(std::time::Duration::from_millis(ms));
+    }
+    let mut config = edge_stt_core::SessionConfig::new().with_endpointing(endpointing);
+    if live_interims {
+        config = config.with_live_interims();
+    }
+    if let Some(ms) = interim_min_interval_ms {
+        config = config.with_interim_min_interval(std::time::Duration::from_millis(ms));
     }
 
     let (audio_tx, mut events_rx) = crate::session::spawn_continuous(stt, config, want_partials);

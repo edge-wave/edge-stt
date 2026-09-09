@@ -147,13 +147,14 @@ impl<'a> AudioSession<'a> {
         let Some(decoder) = live.as_mut() else {
             return Ok(None);
         };
-        if !gate.due() {
+        let heard = utterance.len();
+        if !gate.due(heard) {
             return Ok(None);
         }
         let Some(text) = decoder.push(utterance)? else {
             return Ok(None);
         };
-        if !gate.admit(&text) {
+        if !gate.admit(heard, &text) {
             return Ok(None);
         }
 
