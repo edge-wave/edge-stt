@@ -225,9 +225,12 @@ Asking for twelve threads on a machine where you get about one core's
 worth of time made the process run at 118% CPU, not 1200%.
 whisper.cpp's thread pool synchronises with spinning barriers at every
 graph node, so oversubscription costs far more than the missing cores
-would suggest. `ModelSpec::with_threads` exists for this; the default
+would suggest. `ModelSpec::with_threads` exists for this, and the
+server's `--threads` carries it to every session it opens; the default
 of one thread per core is right for a device that owns itself and wrong
-for one that shares.
+for one that shares. Two live sessions on one machine are exactly the
+sharing case: each asks for the whole processor, and they contend for
+every node until an operator divides the cores between them.
 
 ## Still to measure
 

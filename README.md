@@ -149,6 +149,14 @@ so a supervisor cannot kill a server that is working. The credential is
 checked on the handshake; without `--credential-file` the server
 refuses to start unless you say `--open-to-anyone` out loud.
 
+**Serving more than one live caption at a time needs `--threads`.**
+Whisper hands every recognition a thread per core, so two live sessions
+on one machine spin against each other at every node of the graph and
+both crawl. Dividing the cores between the callers you mean to serve —
+`--threads 2` on a four-core board, say — is what stops that. It is not
+the default because it costs a lone caller speed, and a server told
+`--vad-model` without it says so on startup.
+
 ## Models
 
 | What | Who supplies it |
