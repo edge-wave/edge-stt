@@ -4,6 +4,9 @@
 
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "whisper")]
+pub mod whisper_window;
+
 /// The two conditions an interim result must pass: it must say
 /// something the caller has not already been told, and it must not
 /// arrive sooner than the configured interval allows.

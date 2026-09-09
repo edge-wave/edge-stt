@@ -208,10 +208,32 @@ impl Backend for WhisperBackend {
         })
     }
 
-    /// Nothing yet: this decodes a complete utterance and says so. The
-    /// answer changes when something can recognise a growing one.
+    /// It can recognise a growing utterance by running over it again,
+    /// which means it corrects itself; it never decides boundaries.
     fn capabilities(&self) -> super::Capabilities {
-        super::Capabilities::default()
+        super::Capabilities {
+            live_interims: true,
+            revises: true,
+            self_endpointing: false,
+        }
+    }
+
+    /// A state of its own per session, from the one loaded model, which
+    /// is what lets several sessions run at once without loading twice.
+    fn open_live(&self) -> Result<Box<dyn super::LiveDecoder>> {
+        let state = self
+            .context
+            .create_state()
+            .map_err(|why| Error::ModelUnusable {
+                path: self.model.path.clone(),
+                why: why.to_string(),
+            })?;
+        Ok(Box::new(crate::live::whisper_window::WhisperWindow::new(
+            state,
+            self.language.clone(),
+            i32::from(self.model.thread_count()),
+            self.model.path.clone(),
+        )))
     }
 
     fn kind(&self) -> BackendKind {
@@ -243,9 +265,9 @@ unsafe extern "C" fn should_stop(user_data: *mut c_void) -> bool {
     }
 }
 
-struct Decoded {
-    segments: Vec<Segment>,
-    language: Language,
+pub(crate) struct Decoded {
+    pub(crate) segments: Vec<Segment>,
+    pub(crate) language: Language,
 }
 
 impl WhisperBackend {
@@ -352,7 +374,7 @@ impl WhisperBackend {
     }
 }
 
-fn collect(state: &WhisperState) -> Result<Decoded> {
+pub(crate) fn collect(state: &WhisperState) -> Result<Decoded> {
     let mut segments = Vec::new();
     for index in 0..state.full_n_segments() {
         let Some(segment) = state.get_segment(index) else {
