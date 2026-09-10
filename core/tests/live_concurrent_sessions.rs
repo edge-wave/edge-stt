@@ -16,7 +16,7 @@ use edge_stt_core::{
 const SIMULATED_CHUNK: usize = 1_600; // 100ms of 16kHz audio
 
 fn transcriber() -> EdgeStt {
-    let config = Config::local(support::model_spec())
+    let config = Config::local(support::shared_model_spec())
         .with_language(Language::new(support::sample_language()));
     EdgeStt::new(config).expect("a model")
 }
