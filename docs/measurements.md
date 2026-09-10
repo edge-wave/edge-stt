@@ -94,6 +94,56 @@ family, English from whisper.cpp's public sample and Korean synthesised
 by macOS. No device-class figure exists yet, and that is the one that
 decides whether any of this is affordable where it matters.
 
+### Where a pass ends, and why the closing word is held back
+
+A pass cuts its buffer wherever the last chunk landed, so its last word
+is half a word as often as not — four seconds of Korean ended in "정"
+and four of English in a dangling "ask". Trimming that by timing is the
+obvious answer and it cannot be done. `probe_window` now prints the
+segments a pass returned, and a short buffer comes back as exactly one:
+
+| Language | Buffered | Bound | Segments | Span |
+|---|---|---|---|---|
+| Korean | 1 s | 200 | 1 | 0.00–2.00 |
+| Korean | 2 s | 200 | 1 | 0.00–4.00 |
+| Korean | 4 s | 400 | 1 | 0.00–4.16 |
+| English | 1 s | 200 | 1 | 0.00–1.00 |
+| English | 2 s | 200 | 1 | 0.00–2.00 |
+| English | 4 s | 400 | 1 | 0.00–4.00 |
+
+The single segment spans the whole buffer, and it ends at the buffer's
+own edge or past it — where the model put a timestamp inside the padded
+window it was handed. Nothing there says where speech stopped, so there
+is no timing to trim by. The live recogniser holds its closing word back
+instead and shows it once a later pass has heard past it, which costs a
+caption one word of lag and never shows a broken one. `base-q5_1`, Apple
+M4 Pro, processor.
+
+### Priming a pass with the last one, and why it is not done
+
+Wrappers around this recogniser commonly feed the text so far back in as
+a prompt. `probe_window --carry-prompt` does exactly that over a growing
+buffer, and it is worse in both languages. `base-q5_1`, Apple M4 Pro,
+processor, each pass bounded as the live recogniser bounds it:
+
+| Buffered | Plain | Primed with the previous pass |
+|---|---|---|
+| 3 s, English | "...ask not what your country can" | "what your country can. And so my fellow Americans ask not what your country can." |
+| 4 s, English | "...can do for you, ask" | "country can do for you." |
+| 4 s, Korean | "오늘 날씨가 아주 맑고 ... 산책하기에 정" | "불어서, 산책하기에 정..." |
+
+The mechanism is plain in the output: a prompt tells the decoder to
+*continue* that text, but a pass here re-recognises the utterance from
+its beginning. The two instructions fight, and what comes back is the
+sentence duplicated, or its opening thrown away — which a replacing
+interim would show as a caption jumping backwards. It costs more too:
+three seconds of Korean went from 118 ms to 1.59 s, and two of English
+from 236 ms to 1.29 s.
+
+Priming belongs to designs that hand the recogniser only the newest
+audio each time. This one hands it everything, so the context a prompt
+would supply is already in the audio.
+
 ### Window passes, Raspberry Pi 4, processor
 
 The same passes on the device this project targets. A Raspberry Pi 4
@@ -230,7 +280,10 @@ server's `--threads` carries it to every session it opens; the default
 of one thread per core is right for a device that owns itself and wrong
 for one that shares. Two live sessions on one machine are exactly the
 sharing case: each asks for the whole processor, and they contend for
-every node until an operator divides the cores between them.
+every node until an operator divides the cores between them. The size
+of that is easy to underrate — one test binary running two live
+sessions at once had not finished after thirty minutes on twelve cores,
+and finished in 1.9 s once each session was given half of them.
 
 ## Still to measure
 

@@ -122,6 +122,12 @@ utterance is still recognised in full, and that is where the
 `Transcript` comes from — an interim is never promoted, and never a
 commitment.
 
+**An interim stops one word short of what was heard.** A pass cuts its
+audio wherever the last chunk landed, and the word straddling that cut
+comes back broken; the recognizer holds it until a later pass has heard
+past it, so a caption lags by a word rather than flickering through
+half of one. The finished utterance is unaffected.
+
 **It is not free, which is why it is asked for separately.** Recognising
 a growing utterance means recognising it again and again; registering a
 callback does not turn this on by itself, so a caller who never asked
