@@ -9,26 +9,50 @@ cargo run --release --example transcribe -- --bench MODEL sample.wav
 
 ## What has actually been measured
 
-One set, on one machine, on the GPU. The processor path on that machine
-is still void, for the reason below.
+The whole host half of the reference pair: every model on disk, both
+languages, both paths. The device half is still missing — the Raspberry
+Pi was offline when this was taken.
 
-### Apple M4 Pro, Metal, Korean
+### Apple M4 Pro, both paths, both languages
 
-9.20 s of Korean speech, the language named rather than detected, taking
-the second run of each model so the GPU is warm:
+12 cores, 48 GB, macOS. 5.66 s of English and 5.32 s of Korean, the
+language named rather than detected, warm run of each. Peak resident set
+is what `/usr/bin/time -l` reported for the whole process, model
+included; the machine carried about one core's worth of unrelated load.
 
-| Model | Decoding | Real-time factor | What came back |
-|---|---|---|---|
-| `tiny-q5_1` | 185 ms | 0.02x | one word wrong |
-| `base-q5_1` | 203 ms | 0.02x | right |
-| `small-q5_1` | 476 ms | 0.05x | right |
+| Model | Path | Language | Decoding | Real-time factor | Peak RSS | What came back |
+|---|---|---|---|---|---|---|
+| `tiny-q5_1` | processor | English | 196 ms | 0.03x | 157 MB | right |
+| `tiny-q5_1` | processor | Korean | 201 ms | 0.04x | 157 MB | right |
+| `base-q5_1` | processor | English | 255 ms | 0.05x | 226 MB | right |
+| `base-q5_1` | processor | Korean | 452 ms | 0.08x | 225 MB | one word wrong |
+| `small-q5_1` | processor | English | 712 ms | 0.13x | 466 MB | right |
+| `small-q5_1` | processor | Korean | 973 ms | 0.18x | 466 MB | right |
+| `tiny-q5_1` | Metal | English | 96 ms | 0.02x | 121 MB | right |
+| `tiny-q5_1` | Metal | Korean | 103 ms | 0.02x | 121 MB | right |
+| `base-q5_1` | Metal | English | 132 ms | 0.02x | 166 MB | right |
+| `base-q5_1` | Metal | Korean | 132 ms | 0.02x | 166 MB | one word wrong |
+| `small-q5_1` | Metal | English | 262 ms | 0.05x | 355 MB | right |
+| `small-q5_1` | Metal | Korean | 262 ms | 0.05x | 355 MB | right |
+
+**The ladder is not monotone in a language it was not tuned for.**
+`base` misheard one Korean word — "불어서" as "부러서" — on both paths,
+where the smaller `tiny` and the larger `small` both got it right. A
+bigger model is a better bet, not a guarantee, and the only way to know
+for your language is to run yours.
+
+**Korean costs more than English on the processor and not on the GPU.**
+The same `base` model took 452 ms against 255 ms on the processor and
+132 ms either way on Metal. Budget for the language you will actually
+serve, on the path you will actually run.
 
 Read it for what it is. This is the reference host, not the reference
 device — a Raspberry Pi has no Metal and none of these numbers carry
 over to it. The audio is speech synthesised by macOS, which is cleaner
 and more evenly paced than any microphone will hand you. And the first
-run of a model pays for warming the GPU up: `tiny` took 3.03 s cold and
-185 ms warm, which is why the cold figure is not in the table.
+run after a boot pays for warming the GPU up: `tiny` on Metal took
+5.64 s to load cold and 63 ms warm, which is why the cold figure is not
+in the table.
 
 ### Window passes, Apple M4 Pro, processor
 
@@ -287,15 +311,20 @@ and finished in 1.9 s once each session was given half of them.
 
 ## Still to measure
 
-The two reference machines named in the plan, every model size, Korean
-and English, each with the real-time factor, the time to first partial,
-and peak memory. The table stays honest by staying empty until then.
+The host half of the reference pair is above. Three things are still
+missing, and none of them is a matter of reading:
 
-The window-pass figures now cover both machines, but only in English and
-only for the three smallest models. Korean on the board is not measured,
-and neither is memory under several sessions at once. The model sizes a
-server would run are not there either, because neither machine has them
-on disk.
+- **The device half.** The same table on the Raspberry Pi, both
+  languages, every model on it. The board was offline when the host half
+  was taken, so this is waiting on the board rather than on a decision.
+- **The sizes a server would run.** `medium` and `large-v3` are on
+  neither machine's disk, so the ladder stops at `small`.
+- **Memory under several sessions at once.** The figures above are one
+  session; a server holding one model and several live states is the
+  case the capacity limit permits and nobody has weighed.
+
+The window-pass figures cover both machines, but only in English and
+only for the three smallest models. Korean on the board is not measured.
 
 ## What the library promises about speed
 

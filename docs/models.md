@@ -57,9 +57,10 @@ checksum — before fetching it.
 | `tiny.en-q5_1` `base.en-q5_1` `small.en-q5_1` | as above | English only | a device in an English-only product |
 | `base` `small` | 141 MB, 465 MB | any | neither; they are here so you can measure what quantisation cost you |
 
-How much memory each needs while decoding is not quoted here, because
-this project has not measured it. [measurements.md](measurements.md)
-says what has been taken and what has not.
+How much memory each needs while decoding is quoted for the three
+smallest quantised files on the host and for nothing else yet.
+[measurements.md](measurements.md) has those figures and says what is
+still missing.
 
 ## What these can do while someone is still speaking
 
