@@ -30,7 +30,15 @@ pub async fn start(credential: Option<&str>, capacity: usize) -> Running {
 /// Loads a real model in the background and waits for it, plus a VAD
 /// model, for tests that need continuous sessions to actually decode.
 pub async fn start_streaming(capacity: usize) -> Running {
-    start_streaming_with_threads(capacity, None).await
+    start_streaming_with_threads(capacity, Some(half_the_cores())).await
+}
+
+/// What one recognition gets when a test is not measuring threads.
+/// Given every core, two live sessions on one machine contend at every
+/// node of the graph and neither finishes -- the case --threads exists
+/// for, and one that tests running side by side land in.
+fn half_the_cores() -> u16 {
+    std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).max(1)) as u16
 }
 
 /// The same, with a cap on what one recognition may take, which is
