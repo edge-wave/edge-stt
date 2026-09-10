@@ -35,6 +35,14 @@ pub fn model_path() -> PathBuf {
         .unwrap_or_else(|| panic!("no ggml-*.bin under {dir}"))
 }
 
+/// The same model, with the cores divided rather than claimed whole.
+/// A test opening two live sessions is the case the server's --threads
+/// exists for: given every core each, they contend instead of running.
+pub fn shared_model_spec() -> ModelSpec {
+    let half = std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).max(1));
+    model_spec().with_threads(half as u16)
+}
+
 /// The model, and the accelerator to run it on. Without the variable
 /// it is the processor, which is what a plain machine has.
 pub fn model_spec() -> ModelSpec {
