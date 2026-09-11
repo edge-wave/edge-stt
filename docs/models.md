@@ -58,7 +58,7 @@ checksum — before fetching it.
 | `base` `small` | 141 MB, 465 MB | any | neither; they are here so you can measure what quantisation cost you |
 
 How much memory each needs while decoding is quoted for the three
-smallest quantised files on the host and for nothing else yet.
+smallest quantised files, on both the host and the board.
 [measurements.md](measurements.md) has those figures and says what is
 still missing.
 
@@ -114,16 +114,19 @@ device, set the language.
 
 ## Korean
 
-On a Pi-class board the sizes that beat real time — `tiny` and `base` —
-are poor at Korean, and the smallest size that transcribes Korean
-acceptably, `small`, does not beat real time there. That is the model's
-own arithmetic and no amount of implementation moves it.
+On a Pi-class board the only size that beats real time is `tiny`, which
+is measured at 0.8x there — `base` takes 1.7 to 1.9 times the length of
+the speech and `small` about six. `tiny` is also the weakest at Korean,
+and the smallest size that transcribes Korean acceptably is `small`.
+That is the model's own arithmetic and no amount of implementation
+moves it.
 
 There are three honest answers, and which one is right is yours to pick:
 
 - Run `small` on the device and accept that a sentence takes longer to
   transcribe than it took to say.
-- Keep `base` on the device for English and send Korean to a server.
+- Keep `base` on the device for English — it still runs behind the
+  speaker there, so budget for the lag — and send Korean to a server.
 - Wait for the board. A Jetson-class device with an accelerator changes
   the arithmetic; a Pi 4 does not.
 
