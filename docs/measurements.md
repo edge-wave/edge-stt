@@ -102,6 +102,48 @@ slow one.
 was read from the card, against 390 ms once the page cache held it. A
 process that loads the model per request pays that first figure.
 
+### What a caller actually waits for, over the wire
+
+Everything above times a decode. This times a **caller**: `stream_client`
+pushes a recording at a server at the rate a microphone would produce
+it, and stamps every reply from the moment the stream opened. Server and
+client both on the M4 Pro, so the link costs nothing here — this is the
+floor the network is later added to. Language named on the server,
+median of five runs.
+
+| Model | Language | Audio ran | Final arrived | After the speaker stopped |
+|---|---|---|---|---|
+| `tiny-q5_1` | English | 5.66 s | 6.10 s | 0.44 s |
+| `tiny-q5_1` | Korean | 5.32 s | 5.88 s | 0.56 s |
+| `base-q5_1` | English | 5.66 s | 6.35 s | 0.69 s |
+| `base-q5_1` | Korean | 5.32 s | 5.97 s | 0.65 s |
+| `small-q5_1` | English | 5.66 s | 6.96 s | 1.30 s |
+| `small-q5_1` | Korean | 5.32 s | 6.78 s | 1.46 s |
+
+**The last column is the one to budget with.** A caller cannot be
+answered before they stop talking, so what a server costs is the wait
+after that — boundary detection, the decode, and getting the words back.
+It is larger than the decode alone: `small` decodes in 757 ms here and
+answers a caller in 1.30 s.
+
+**Against the board deciding for itself**, from the device table above:
+the Pi needs 4.43 s after the speaker stops with `tiny`, its only model
+that keeps up with speech at all. A host answers in 1.30 s while running
+`small`, three rungs up. Handing the audio to a server is not a
+compromise on this pair of machines — it is faster *and* better, and the
+only thing it costs is the link.
+
+**Name the language on the server.** The same `small` run with detection
+left open answered in 2.39 s against 1.55 s named — most of a second,
+spent deciding something the deployment already knew.
+
+**What this table does not include, and it dominates everything in it.**
+The client sends `close_stream` the moment the recording ends, so the
+utterance closes at once. A live microphone has no such signal: the
+boundary detector waits out `pause_tolerance_ms` of silence first —
+three seconds by default, five times the largest number in the table.
+Tuning that is worth more to a caller than the choice of model.
+
 ### Window passes, Apple M4 Pro, processor
 
 What one pass over a partial utterance costs, taken with
@@ -375,6 +417,9 @@ missing, and neither is a matter of reading:
 - **Memory under several sessions at once.** The figures above are one
   session; a server holding one model and several live states is the
   case the capacity limit permits and nobody has weighed.
+- **The link.** The caller-seat figures are client and server on one
+  machine. What the device-to-host leg adds over a real network is not
+  measured, because the board was offline again when the rest was.
 
 The window-pass figures cover both machines, but only in English and
 only for the three smallest models. Korean window passes on the board
