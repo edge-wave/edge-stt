@@ -137,6 +137,34 @@ only thing it costs is the link.
 left open answered in 2.39 s against 1.55 s named — most of a second,
 spent deciding something the deployment already knew.
 
+#### With the caller on the board and the recogniser on the host
+
+The same runs again with `stream_client` on the Raspberry Pi and the
+server on the M4 Pro, over tailscale on one LAN — a direct path, not a
+relay, at 5.9 to 31.8 ms round trip. Median of five.
+
+| Model | Language | Caller on the board | Caller on the host | The link added |
+|---|---|---|---|---|
+| `tiny-q5_1` | English | 0.40 s | 0.44 s | −0.04 s |
+| `tiny-q5_1` | Korean | 0.62 s | 0.56 s | +0.06 s |
+| `base-q5_1` | English | 0.68 s | 0.69 s | −0.01 s |
+| `base-q5_1` | Korean | 0.68 s | 0.65 s | +0.03 s |
+| `small-q5_1` | English | 1.45 s | 1.30 s | +0.15 s |
+| `small-q5_1` | Korean | 1.42 s | 1.46 s | −0.04 s |
+
+**The link costs nothing this method can see.** The differences straddle
+zero and every one of them is smaller than the spread between repeats of
+the same cell — half a second, for `small` in English. That is not a
+surprise once said plainly: the audio is 32 kB a second and it is
+already uploaded by the time the speaker stops, because it went up while
+they were still talking. Only the answer has to come back, and that is
+one message over one round trip.
+
+So the deployment the earlier figures kept pointing at costs what the
+server costs. A board that decides for itself waits 4.43 s with the only
+model that keeps up with speech there; the same board as a thin client
+waits 1.42 s and gets `small`.
+
 **What this table does not include, and it dominates everything in it.**
 The client sends `close_stream` the moment the recording ends, so the
 utterance closes at once. A live microphone has no such signal: the
@@ -417,9 +445,10 @@ missing, and neither is a matter of reading:
 - **Memory under several sessions at once.** The figures above are one
   session; a server holding one model and several live states is the
   case the capacity limit permits and nobody has weighed.
-- **The link.** The caller-seat figures are client and server on one
-  machine. What the device-to-host leg adds over a real network is not
-  measured, because the board was offline again when the rest was.
+- **A link that is not a LAN.** The device-to-host leg was measured on
+  one local network with a direct path. What a relayed or distant link
+  adds is not known, and it is the case where the answer's single round
+  trip stops being free.
 
 The window-pass figures cover both machines, but only in English and
 only for the three smallest models. Korean window passes on the board
