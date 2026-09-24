@@ -9,17 +9,21 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
-use super::{Backend, Work};
-use crate::config::{BackendKind, Config, Language, RemoteConfig};
+use super::{Backend, Opened, Work};
+use crate::config::{BackendKind, Boundaries, Config, Language, RemoteConfig, SessionConfig};
 use crate::error::{Error, Result};
 use crate::transcript::Transcript;
 use crate::utterance::Utterance;
 use crate::wire::{ClientMessage, ServerMessage, WireFormat, partial_from, transcript_from};
 
+mod stream;
+
 pub struct RemoteBackend {
     remote: RemoteConfig,
     language: Option<Language>,
     runtime: Runtime,
+    max_duration: Duration,
+    timeout: Option<Duration>,
 }
 
 impl RemoteBackend {
@@ -36,6 +40,8 @@ impl RemoteBackend {
             remote: remote.clone(),
             language: config.language.clone(),
             runtime,
+            max_duration: config.max_duration,
+            timeout: config.timeout,
         })
     }
 
@@ -86,10 +92,37 @@ impl Backend for RemoteBackend {
         })
     }
 
-    /// Boundary detection runs here while the audio is decoded away,
-    /// so nothing local can produce words mid-utterance.
+    /// A session runs on the server whole, so its early words, and its
+    /// boundaries when a detector is wanted, all come from there.
     fn capabilities(&self) -> super::Capabilities {
-        super::Capabilities::default()
+        super::Capabilities {
+            live_interims: true,
+            revises: true,
+            self_endpointing: false,
+            hosts_sessions: true,
+        }
+    }
+
+    fn open_hosted(&self, config: &SessionConfig) -> Result<Opened<'_>> {
+        let pause_tolerance = match &config.boundaries {
+            Boundaries::Caller => None,
+            Boundaries::Detector(endpointing) => Some(endpointing.pause_tolerance),
+            Boundaries::Recognizer => {
+                return Err(Error::BackendUnavailable {
+                    backend: "a server that finds boundaries without a detector",
+                });
+            }
+        };
+        let stream = stream::RemoteStream::open(stream::Request {
+            remote: self.remote.clone(),
+            language: self.language.as_ref().map(|l| l.as_str().to_string()),
+            pause_tolerance,
+            live_interims: config.live_interims,
+            interim_min_interval: config.interim_min_interval,
+            max_duration: self.max_duration,
+            timeout: self.timeout,
+        })?;
+        Ok(Opened::Hosted(Box::new(stream)))
     }
 
     fn kind(&self) -> BackendKind {
@@ -100,52 +133,66 @@ impl Backend for RemoteBackend {
 type Socket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
-impl RemoteBackend {
-    async fn open(&self) -> Result<Socket> {
-        let mut request = self
-            .remote
-            .endpoint
-            .as_str()
-            .into_client_request()
-            .map_err(|e| Error::InvalidValue {
-                setting: "endpoint",
-                expected: "a websocket address".to_string(),
-                got: e.to_string(),
-            })?;
-        if let Some(credential) = &self.remote.credential {
-            let value = format!("Bearer {}", credential.expose());
-            let header = HeaderValue::from_str(&value).map_err(|_| Error::InvalidValue {
-                setting: "credential",
-                expected: "characters a header can carry".to_string(),
-                got: "unusable".to_string(),
-            })?;
-            request.headers_mut().insert("authorization", header);
-        }
-
-        let attempt = tokio::time::timeout(
-            self.remote.connect_timeout,
-            tokio_tungstenite::connect_async(request),
-        )
-        .await;
-
-        match attempt {
-            Err(_) => Err(self.network("the connection was not answered in time")),
-            Ok(Err(why)) => Err(self.classify_handshake(why)),
-            Ok(Ok((socket, _response))) => Ok(socket),
-        }
+/// The handshake both a request and a stream begin with.
+async fn connect(remote: &RemoteConfig) -> Result<Socket> {
+    let mut request = remote
+        .endpoint
+        .as_str()
+        .into_client_request()
+        .map_err(|e| Error::InvalidValue {
+            setting: "endpoint",
+            expected: "a websocket address".to_string(),
+            got: e.to_string(),
+        })?;
+    if let Some(credential) = &remote.credential {
+        let value = format!("Bearer {}", credential.expose());
+        let header = HeaderValue::from_str(&value).map_err(|_| Error::InvalidValue {
+            setting: "credential",
+            expected: "characters a header can carry".to_string(),
+            got: "unusable".to_string(),
+        })?;
+        request.headers_mut().insert("authorization", header);
     }
 
-    /// A dead host and a refused credential need different answers from
-    /// the caller, so they never share a variant.
-    fn classify_handshake(&self, why: tokio_tungstenite::tungstenite::Error) -> Error {
-        if let tokio_tungstenite::tungstenite::Error::Http(response) = &why
-            && response.status().as_u16() == 401
-        {
-            return Error::CredentialRejected {
-                endpoint: self.remote.endpoint.clone(),
-            };
-        }
-        self.network(why)
+    let attempt = tokio::time::timeout(
+        remote.connect_timeout,
+        tokio_tungstenite::connect_async(request),
+    )
+    .await;
+
+    match attempt {
+        Err(_) => Err(network(
+            &remote.endpoint,
+            "the connection was not answered in time",
+        )),
+        Ok(Err(why)) => Err(classify_handshake(&remote.endpoint, why)),
+        Ok(Ok((socket, _response))) => Ok(socket),
+    }
+}
+
+/// A dead host and a refused credential need different answers from
+/// the caller, so they never share a variant.
+fn classify_handshake(endpoint: &str, why: tokio_tungstenite::tungstenite::Error) -> Error {
+    if let tokio_tungstenite::tungstenite::Error::Http(response) = &why
+        && response.status().as_u16() == 401
+    {
+        return Error::CredentialRejected {
+            endpoint: endpoint.to_string(),
+        };
+    }
+    network(endpoint, why)
+}
+
+fn network(endpoint: &str, why: impl ToString) -> Error {
+    Error::Network {
+        endpoint: endpoint.to_string(),
+        why: why.to_string(),
+    }
+}
+
+impl RemoteBackend {
+    async fn open(&self) -> Result<Socket> {
+        connect(&self.remote).await
     }
 
     async fn read_replies(
@@ -211,47 +258,63 @@ impl RemoteBackend {
                     queue_position,
                     ..
                 } => {
-                    return Err(self.error_for(code, message, *retry_after_ms, *queue_position));
+                    return Err(error_for(
+                        &self.remote.endpoint,
+                        code,
+                        message,
+                        *retry_after_ms,
+                        *queue_position,
+                    ));
                 }
             }
         }
     }
+}
 
-    fn error_for(
-        &self,
-        code: &str,
-        message: &str,
-        retry_after_ms: Option<u64>,
-        queue_position: Option<u32>,
-    ) -> Error {
-        let endpoint = self.remote.endpoint.clone();
-        match code {
-            "unsupported_audio" => Error::InvalidValue {
-                setting: "audio",
-                expected: "16000 Hz mono 16-bit".to_string(),
-                got: message.to_string(),
-            },
-            "audio_too_long" => Error::InvalidValue {
-                setting: "audio",
-                expected: "audio within the server's limit".to_string(),
-                got: message.to_string(),
-            },
-            "at_capacity" => Error::ServerAtCapacity {
-                endpoint,
-                queue_position,
-                retry_after: retry_after_ms.map(Duration::from_millis),
-            },
-            "unauthorized" => Error::CredentialRejected { endpoint },
-            "unsupported_language" => Error::InvalidValue {
-                setting: "language",
-                expected: "one the server was started with".to_string(),
-                got: message.to_string(),
-            },
-            _ => Error::ServerError {
-                endpoint,
-                why: message.to_string(),
-            },
-        }
+fn error_for(
+    endpoint: &str,
+    code: &str,
+    message: &str,
+    retry_after_ms: Option<u64>,
+    queue_position: Option<u32>,
+) -> Error {
+    let endpoint = endpoint.to_string();
+    match code {
+        "unsupported_audio" => Error::InvalidValue {
+            setting: "audio",
+            expected: "16000 Hz mono 16-bit".to_string(),
+            got: message.to_string(),
+        },
+        "audio_too_long" => Error::InvalidValue {
+            setting: "audio",
+            expected: "audio within the server's limit".to_string(),
+            got: message.to_string(),
+        },
+        "at_capacity" => Error::ServerAtCapacity {
+            endpoint,
+            queue_position,
+            retry_after: retry_after_ms.map(Duration::from_millis),
+        },
+        "unauthorized" => Error::CredentialRejected { endpoint },
+        "unsupported_language" => Error::InvalidValue {
+            setting: "language",
+            expected: "one the server was started with".to_string(),
+            got: message.to_string(),
+        },
+        "streaming_unavailable" => Error::InvalidValue {
+            setting: "endpointing",
+            expected: "a server started with a VAD model to find boundaries".to_string(),
+            got: message.to_string(),
+        },
+        "invalid_request" => Error::InvalidValue {
+            setting: "request",
+            expected: "one this server understands".to_string(),
+            got: message.to_string(),
+        },
+        _ => Error::ServerError {
+            endpoint,
+            why: message.to_string(),
+        },
     }
 }
 

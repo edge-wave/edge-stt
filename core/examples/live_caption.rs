@@ -1,16 +1,23 @@
-//! Show words while the speaker is still talking, on the device.
+//! Show words while the speaker is still talking, on the device or from
+//! a server.
 //!
 //! Feeds a recording in at the rate a microphone would produce it and
-//! prints every interim as it arrives, so the wait is visible.
+//! prints every interim as it arrives, so the wait is visible. With
+//! `--server`, the server runs the session and the recording's end is
+//! where the caller says speech stopped.
 //!
 //! usage: live_caption [--language ko] [--pause-tolerance-ms N]
 //!                     [--interim-ms N] [--threads N]
 //!                     <model> <vad model> <wav>
+//!        live_caption --server ws://host:8000/api/v1/transcribe
+//!                     [--interim-ms N] <wav>
 
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use edge_stt_core::{Config, EdgeStt, EndpointConfig, Language, ModelSpec, Partial, SessionConfig};
+use edge_stt_core::{
+    Config, EdgeStt, EndpointConfig, Language, ModelSpec, Partial, RemoteConfig, SessionConfig,
+};
 
 const SAMPLE_RATE: usize = 16_000;
 
@@ -23,10 +30,12 @@ fn main() -> ExitCode {
     let mut pause_ms = 3000u64;
     let mut interim_ms = 300u64;
     let mut threads = None;
+    let mut server = None;
     let mut positional = Vec::new();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--server" => server = args.next(),
             "--language" => language = args.next(),
             "--pause-tolerance-ms" => {
                 pause_ms = args.next().and_then(|v| v.parse().ok()).unwrap_or(pause_ms)
@@ -41,15 +50,17 @@ fn main() -> ExitCode {
             _ => positional.push(arg),
         }
     }
-    if positional.len() != 3 {
+    let wanted = if server.is_some() { 1 } else { 3 };
+    if positional.len() != wanted {
         eprintln!(
             "usage: live_caption [--language ko] [--pause-tolerance-ms N] \
-             [--interim-ms N] [--threads N] <model> <vad model> <wav>"
+             [--interim-ms N] [--threads N] <model> <vad model> <wav>\n       \
+             live_caption --server <endpoint> [--interim-ms N] <wav>"
         );
         return ExitCode::FAILURE;
     }
 
-    let samples = match read_wav(&positional[2]) {
+    let samples = match read_wav(&positional[wanted - 1]) {
         Ok(samples) => samples,
         Err(why) => {
             eprintln!("{why}");
@@ -57,11 +68,16 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut model = ModelSpec::at(&positional[0]);
-    if let Some(count) = threads {
-        model = model.with_threads(count);
-    }
-    let mut config = Config::local(model);
+    let mut config = match &server {
+        Some(endpoint) => Config::remote(RemoteConfig::at(endpoint)),
+        None => {
+            let mut model = ModelSpec::at(&positional[0]);
+            if let Some(count) = threads {
+                model = model.with_threads(count);
+            }
+            Config::local(model)
+        }
+    };
     if let Some(tag) = &language {
         config = config.with_language(Language::new(tag));
     }
@@ -74,12 +90,15 @@ fn main() -> ExitCode {
         }
     };
 
-    let session = SessionConfig::new()
-        .with_endpointing(
+    let session = match server {
+        Some(_) => SessionConfig::new().with_caller_boundaries(),
+        None => SessionConfig::new().with_endpointing(
             EndpointConfig::new()
                 .with_local_vad_model(&positional[1])
                 .with_pause_tolerance(Duration::from_millis(pause_ms)),
-        )
+        ),
+    };
+    let session = session
         .with_live_interims()
         .with_interim_min_interval(Duration::from_millis(interim_ms));
 

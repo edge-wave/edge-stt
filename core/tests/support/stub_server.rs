@@ -64,6 +64,8 @@ pub struct StreamLog {
     pub opened_with: Option<serde_json::Value>,
     pub frames: usize,
     pub frames_at_close: Option<usize>,
+    /// One-shot requests that reached this server while it hosts streams.
+    pub requests: usize,
 }
 
 impl StreamScript {
@@ -195,6 +197,9 @@ async fn serve(stream: tokio::net::TcpStream, behaviour: Behaviour, expected: Op
         }
         if kind != "end" {
             continue;
+        }
+        if let Behaviour::Stream(script) = &behaviour {
+            script.log.lock().expect("an unpoisoned log").requests += 1;
         }
 
         let _ = send(&mut socket, json_accepted(&request_id)).await;
