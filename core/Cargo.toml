@@ -34,11 +34,9 @@ remote = [
     "dep:serde_json",
     "dep:uuid",
 ]
-# Continuous audio input with self-contained utterance-boundary
-# detection, built on whisper.cpp's own VAD support -- no extra crate,
-# just more of whisper-rs. Off by default: it is a second model file
-# and a second entry point most embedders never asked for.
-streaming = ["whisper"]
+# Continuous audio input. The device's boundary detector also needs
+# `whisper`; a thin client streaming to a server needs neither.
+streaming = []
 
 [dependencies]
 log.workspace = true

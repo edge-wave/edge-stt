@@ -73,11 +73,14 @@ generated from the same source and cannot drift from it.
 cargo clippy --workspace --all-targets --features full -- -D warnings
 cargo fmt --all --check
 cargo test --workspace
+cargo check -p edge-stt-core --no-default-features --features remote,streaming
 ```
 
 `--all-features` is not the check to run: it turns on the CUDA and
 Vulkan accelerators, which need toolchains most machines do not have.
-`full` is whisper plus remote, which builds everywhere.
+`full` is whisper plus remote plus streaming, which builds everywhere.
+The last line is a client that only talks to a server: it must build
+without whisper.cpp, so a board can skip cmake entirely.
 
 Tests needing a real model file are marked ignored and do not run by
 default:
