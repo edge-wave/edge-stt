@@ -82,13 +82,33 @@ if let Some(transcript) = session.close(None)? {
 }
 ```
 
-It works the same way against the remote backend: the server, not the
-caller, decides the boundaries there. `vad_model` is a second, separate
+It works the same way against the remote backend: the boundaries are
+still found on this side, and each finished utterance goes to the
+server whole. `vad_model` is a second, separate
 model file — see [Models](#models) below — and `pause_tolerance`
 (`EndpointConfig::with_pause_tolerance`) trades responsiveness against
 the risk of splitting a natural mid-sentence pause; the default is a
 few seconds, the same order of magnitude edge-ear uses for its own
 end-of-speech detection.
+
+### When the caller already knows where speech stops
+
+A front end like edge-ear decides where an utterance ends before
+edge-stt hears it. Running a second detector here would only disagree
+with it, so leave the boundaries to the caller instead:
+
+```rust
+let mut session = stt.open_session(SessionConfig::new().with_caller_boundaries())?;
+for chunk in chunks_while_recording {
+    session.push(chunk, None)?; // never ends an utterance on its own
+}
+let transcript = session.close(None)?; // speech ended: decode all of it
+```
+
+No VAD model is needed, and the result is the same one handing the
+whole recording to `transcribe` would give. Only the maximum duration
+ends an utterance before `close`. What streaming adds is words while the
+speaker is still talking, asked for as below.
 
 ### Words while the speaker is still talking
 

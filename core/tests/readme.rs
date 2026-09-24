@@ -62,6 +62,22 @@ fn the_continuous_example(
 
 #[allow(dead_code)]
 #[cfg(feature = "streaming")]
+fn the_caller_bounded_example(
+    stt: &edge_stt_core::EdgeStt,
+    chunks_while_recording: Vec<&[i16]>,
+) -> edge_stt_core::Result<()> {
+    use edge_stt_core::SessionConfig;
+
+    let mut session = stt.open_session(SessionConfig::new().with_caller_boundaries())?;
+    for chunk in chunks_while_recording {
+        session.push(chunk, None)?;
+    }
+    let _transcript = session.close(None)?;
+    Ok(())
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "streaming")]
 fn the_live_interims_example(
     stt: &edge_stt_core::EdgeStt,
     chunk: &[i16],
@@ -96,6 +112,7 @@ fn the_examples_above_are_the_ones_the_readme_shows() {
         "let mut session = stt.open_session(EndpointConfig::new(\"models/ggml-silero-v5.1.2.bin\"))?;",
         "if let Some(transcript) = session.push(chunk, None)? {",
         "if let Some(transcript) = session.close(None)? {",
+        "let mut session = stt.open_session(SessionConfig::new().with_caller_boundaries())?;",
         "        .with_live_interims(),",
         "    PartialKind::Replace => caption = partial.text,",
         "if let Some(transcript) = session.push(chunk, Some(&mut show))? {",

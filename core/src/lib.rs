@@ -17,8 +17,9 @@ pub mod wire;
 
 pub use cancel::CancelToken;
 pub use config::{
-    Accelerator, AudioFormat, BackendChoice, BackendKind, Config, DEFAULT_INTERIM_MIN_INTERVAL,
-    Language, ModelSize, ModelSpec, RemoteConfig, SampleType, Secret, SessionConfig,
+    Accelerator, AudioFormat, BackendChoice, BackendKind, Boundaries, Config,
+    DEFAULT_INTERIM_MIN_INTERVAL, Language, ModelSize, ModelSpec, RemoteConfig, SampleType, Secret,
+    SessionConfig,
 };
 pub use endpoint::EndpointConfig;
 pub use error::{Error, Result};
@@ -69,13 +70,13 @@ impl EdgeStt {
         self.run(utterance, Some(&mut sink), cancel)
     }
 
-    /// Hands back a session that finds its own utterance boundaries in
-    /// pushed audio. Each session owns its own state, so several may be
-    /// open at once against one loaded recognizer.
+    /// Hands back a session that ends utterances where its `Boundaries`
+    /// say. Each session owns its own state, so several may be open at
+    /// once against one loaded recognizer.
     ///
     /// Accepts an `EndpointConfig` exactly as it always has, and also a
     /// `SessionConfig` for a caller who wants words while speech
-    /// continues.
+    /// continues or decides the boundaries itself.
     #[cfg(feature = "streaming")]
     pub fn open_session(&self, config: impl Into<SessionConfig>) -> Result<AudioSession<'_>> {
         let config = config.into();
@@ -91,26 +92,27 @@ impl EdgeStt {
             });
         }
 
-        let endpointer = match (&config.endpointing, can.self_endpointing) {
-            (Some(endpointing), _) => Some(Box::new(endpoint::whisper_vad::WhisperVad::load(
-                endpointing,
-            )?) as Box<dyn endpoint::Endpointer>),
-            (None, true) => None,
-            (None, false) => {
+        let endpointer = match (&config.boundaries, can.self_endpointing) {
+            (Boundaries::Detector(endpointing), _) => Some(Box::new(
+                endpoint::whisper_vad::WhisperVad::load(endpointing)?,
+            )
+                as Box<dyn endpoint::Endpointer>),
+            (Boundaries::Recognizer, true) | (Boundaries::Caller, _) => None,
+            (Boundaries::Recognizer, false) => {
                 return Err(Error::InvalidValue {
                     setting: "endpointing",
-                    expected: "a boundary-detection model, or a recognizer that finds its own \
-                               boundaries"
+                    expected: "a boundary-detection model, a recognizer that finds its own \
+                               boundaries, or boundaries left to the caller"
                         .to_string(),
-                    got: "neither".to_string(),
+                    got: "none of them".to_string(),
                 });
             }
         };
 
         // Opened for boundaries as well as for early words: a
-        // recognizer that endpoints itself has to hear the audio to do
-        // it, whether or not anyone asked to hear it early.
-        let live = match config.live_interims || endpointer.is_none() {
+        // recognizer that endpoints itself has to hear the audio to do it.
+        let finds_boundaries = matches!(config.boundaries, Boundaries::Recognizer);
+        let live = match config.live_interims || finds_boundaries {
             true => Some(self.backend.open_live()?),
             false => None,
         };
