@@ -33,6 +33,22 @@ pub async fn start_streaming(capacity: usize) -> Running {
     start_streaming_with_threads(capacity, Some(half_the_cores())).await
 }
 
+/// Starts a server on a runtime of its own, for a test that talks to it
+/// through the library, whose blocking calls cannot run inside a runtime.
+pub fn serving(
+    start: impl std::future::Future<Output = Running>,
+) -> (tokio::runtime::Runtime, Running) {
+    let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+    let running = runtime.block_on(start);
+    (runtime, running)
+}
+
+/// A remote transcriber pointed at a test server.
+pub fn client(running: &Running) -> edge_stt_core::EdgeStt {
+    let remote = edge_stt_core::RemoteConfig::at(running.endpoint());
+    edge_stt_core::EdgeStt::new(edge_stt_core::Config::remote(remote)).expect("a client")
+}
+
 /// A real model and no VAD model, the way a server serving only callers
 /// that decide their own boundaries can be started.
 pub async fn start_without_vad(capacity: usize) -> Running {

@@ -1,7 +1,7 @@
 //! Remote first, the device second, and only when the caller asked.
 
-use super::{Backend, Work};
-use crate::config::BackendKind;
+use super::{Backend, Opened, Work};
+use crate::config::{BackendKind, SessionConfig};
 use crate::error::{Error, Result};
 use crate::transcript::Transcript;
 use crate::utterance::Utterance;
@@ -43,6 +43,15 @@ impl Backend for FallbackBackend {
 
     fn kind(&self) -> BackendKind {
         self.primary.kind()
+    }
+
+    /// Falls back only here, at open: a session already streaming to the
+    /// server has nothing on this side to continue it from.
+    fn open_hosted(&self, config: &SessionConfig) -> Result<Opened<'_>> {
+        match self.primary.open_hosted(config) {
+            Err(why) if worth_retrying_here(&why) => Ok(Opened::Local(&*self.local)),
+            outcome => outcome,
+        }
     }
 }
 
