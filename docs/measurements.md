@@ -246,8 +246,20 @@ at every one, including with no pause at all: `small` returned the first
 sentence and stopped. So the pause is not the cause. Whisper sometimes
 ends a decode after the first of two sentences, and the longer the
 utterance handed to it, the more room it has to. The same audio through
-`transcribe` does the same, so this is not the session; it has not yet
-been checked against whisper.cpp's own binary.
+`transcribe` does the same, so this is not the session.
+
+**It is not this library either.** whisper.cpp's own `whisper-cli`,
+built from the same 1.8.3 source the library links, byte for byte, was
+given the same five joined recordings and the same three models. Set
+the way the library decodes — greedy with one candidate, timestamps
+on, flash attention off, which `whisper-cli` turns on by default — it
+returned the same number of words as the library in all fifteen cases,
+drops included. Its defaults move the drops rather than remove them:
+beam search of five recovered the second sentence in two cases and lost
+it in another, and flash attention alone flipped one more. `small` lost
+the second sentence of one pair at every pause and under every setting
+tried. No decoding setting fixes this; recognising each sentence on its
+own does, since every sentence was complete when recognised apart.
 
 What it means for choosing boundaries: a short request after a wake
 word is one sentence and is safe to hand over whole. For longer speech,
@@ -534,8 +546,6 @@ not a matter of reading:
 - **Why a whole recording sent from the board waits a second longer**
   than the same request from the host, when neither the link nor the
   handshake explains it.
-- **Whether whisper.cpp's own binary also drops a second sentence**, and
-  which decoding setting, if any, keeps it.
 
 The window-pass figures cover both machines, but only in English and
 only for the three smallest models. Korean window passes on the board
