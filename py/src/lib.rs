@@ -393,28 +393,46 @@ impl PyEdgeStt {
     }
 
     /// Opens a continuous session against a second, separate VAD
-    /// model file -- push samples to it as they arrive. Ask for
+    /// model file -- push samples to it as they arrive. Pass
+    /// `caller_boundaries=True` instead of a VAD model when the caller
+    /// already knows where speech stops: an utterance then ends only at
+    /// `close` or at the maximum duration. Ask for
     /// `live_interims` to also hear words while the speaker is still
     /// talking, which costs repeated recognition and so is not implied
     /// by passing a callback.
     #[pyo3(signature = (
-        vad_model,
+        vad_model = None,
         pause_tolerance = None,
         live_interims = false,
         interim_min_interval = None,
+        caller_boundaries = false,
     ))]
     fn open_session(
         &self,
-        vad_model: &str,
+        vad_model: Option<&str>,
         pause_tolerance: Option<f64>,
         live_interims: bool,
         interim_min_interval: Option<f64>,
+        caller_boundaries: bool,
     ) -> PyResult<PySession> {
-        let mut endpointing = edge_stt_core::EndpointConfig::new(vad_model);
-        if let Some(seconds) = pause_tolerance {
-            endpointing = endpointing.with_pause_tolerance(Duration::from_secs_f64(seconds));
+        let mut config = edge_stt_core::SessionConfig::new();
+        match (vad_model, caller_boundaries) {
+            (Some(_), true) => {
+                return Err(InvalidValueError::new_err(
+                    "pass vad_model or caller_boundaries, not both",
+                ));
+            }
+            (Some(path), false) => {
+                let mut endpointing = edge_stt_core::EndpointConfig::new(path);
+                if let Some(seconds) = pause_tolerance {
+                    endpointing =
+                        endpointing.with_pause_tolerance(Duration::from_secs_f64(seconds));
+                }
+                config = config.with_endpointing(endpointing);
+            }
+            (None, true) => config = config.with_caller_boundaries(),
+            (None, false) => {}
         }
-        let mut config = edge_stt_core::SessionConfig::new().with_endpointing(endpointing);
         if live_interims {
             config = config.with_live_interims();
         }

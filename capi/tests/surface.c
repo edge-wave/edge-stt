@@ -77,6 +77,14 @@ int main(void) {
     CHECK(edge_stt_session_new(stt, &unsized) == NULL);
     CHECK(strlen(edge_stt_get_last_error()) > 0);
 
+    /* Boundaries come from a detector or from the caller, never both. */
+    edge_stt_session_opts both = {0};
+    both.struct_size = sizeof(both);
+    both.vad_model = "/no/such/vad.bin";
+    both.caller_boundaries = 1;
+    CHECK(edge_stt_session_new(stt, &both) == NULL);
+    CHECK(strstr(edge_stt_get_last_error(), "caller_boundaries") != NULL);
+
     edge_stt_free(stt);
     printf("the C surface holds\n");
     return 0;

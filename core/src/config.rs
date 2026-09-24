@@ -217,12 +217,25 @@ impl fmt::Display for Language {
 /// every pushed chunk, short enough that text still looks live.
 pub const DEFAULT_INTERIM_MIN_INTERVAL: Duration = Duration::from_millis(300);
 
+/// Who decides where one utterance in a continuous session ends.
+#[derive(Debug, Clone, Default)]
+pub enum Boundaries {
+    /// The recognizer itself, which only one that says it can may do.
+    #[default]
+    Recognizer,
+    /// A separate boundary-detection model, run beside the recognizer.
+    Detector(crate::endpoint::EndpointConfig),
+    /// The caller, by closing the session. Only the maximum duration
+    /// ends an utterance before that.
+    Caller,
+}
+
 /// Everything a continuous session is opened with. An `EndpointConfig`
 /// converts into one, so the call that opens a session today is
 /// unchanged and keeps behaving identically.
 #[derive(Debug, Clone)]
 pub struct SessionConfig {
-    pub endpointing: Option<crate::endpoint::EndpointConfig>,
+    pub boundaries: Boundaries,
     pub live_interims: bool,
     pub interim_min_interval: Duration,
 }
@@ -230,14 +243,21 @@ pub struct SessionConfig {
 impl SessionConfig {
     pub fn new() -> Self {
         Self {
-            endpointing: None,
+            boundaries: Boundaries::Recognizer,
             live_interims: false,
             interim_min_interval: DEFAULT_INTERIM_MIN_INTERVAL,
         }
     }
 
     pub fn with_endpointing(mut self, endpointing: crate::endpoint::EndpointConfig) -> Self {
-        self.endpointing = Some(endpointing);
+        self.boundaries = Boundaries::Detector(endpointing);
+        self
+    }
+
+    /// Leaves every boundary to the caller, for one that already knows
+    /// where speech stopped: an utterance ends when the session closes.
+    pub fn with_caller_boundaries(mut self) -> Self {
+        self.boundaries = Boundaries::Caller;
         self
     }
 
@@ -261,9 +281,9 @@ impl SessionConfig {
                 got: "zero".to_string(),
             });
         }
-        match &self.endpointing {
-            Some(endpointing) => endpointing.check(),
-            None => Ok(()),
+        match &self.boundaries {
+            Boundaries::Detector(endpointing) => endpointing.check(),
+            Boundaries::Recognizer | Boundaries::Caller => Ok(()),
         }
     }
 }

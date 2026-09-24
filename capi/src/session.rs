@@ -81,7 +81,7 @@ pub struct edge_stt_session_opts {
     pub struct_size: usize,
     /// A ggml VAD file -- a second, separate model from the one
     /// edge_stt_load_model loaded. NULL only where the model finds its
-    /// own utterance boundaries.
+    /// own utterance boundaries, or where caller_boundaries is set.
     pub vad_model: *const c_char,
     /// How long a pause must last before an utterance is considered
     /// finished, or zero for the documented default.
@@ -93,6 +93,10 @@ pub struct edge_stt_session_opts {
     /// The shortest gap between two delivered interim results, or zero
     /// for the documented default.
     pub interim_min_interval_ms: u64,
+    /// Non-zero when the caller already knows where speech stops: an
+    /// utterance then ends only at edge_stt_session_close or at the
+    /// maximum duration. Cannot be combined with vad_model.
+    pub caller_boundaries: i32,
 }
 
 /// Reads as much of `opts` as both sides know about, leaving the rest
@@ -113,6 +117,7 @@ unsafe fn read_opts(opts: *const edge_stt_session_opts) -> Option<edge_stt_sessi
         pause_tolerance_ms: 0,
         live_interims: 0,
         interim_min_interval_ms: 0,
+        caller_boundaries: 0,
     };
     let take = declared.min(std::mem::size_of::<edge_stt_session_opts>());
     unsafe {
@@ -161,7 +166,16 @@ pub unsafe extern "C" fn edge_stt_session_new(
     };
 
     let mut config = SessionConfig::new();
-    if !opts.vad_model.is_null() {
+    if opts.caller_boundaries != 0 {
+        if !opts.vad_model.is_null() {
+            fail_with(
+                edge_stt_error::EDGE_STT_INVALID_VALUE,
+                "set vad_model or caller_boundaries, not both",
+            );
+            return std::ptr::null_mut();
+        }
+        config = config.with_caller_boundaries();
+    } else if !opts.vad_model.is_null() {
         let vad_model = match required_str(opts.vad_model, "vad_model") {
             Ok(path) => path,
             Err(_) => return std::ptr::null_mut(),

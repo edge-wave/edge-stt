@@ -203,7 +203,7 @@ typedef struct {
     /**
      * A ggml VAD file -- a second, separate model from the one
      * edge_stt_load_model loaded. NULL only where the model finds its
-     * own utterance boundaries.
+     * own utterance boundaries, or where caller_boundaries is set.
      */
     const char *vad_model;
     /**
@@ -222,6 +222,12 @@ typedef struct {
      * for the documented default.
      */
     uint64_t interim_min_interval_ms;
+    /**
+     * Non-zero when the caller already knows where speech stops: an
+     * utterance then ends only at edge_stt_session_close or at the
+     * maximum duration. Cannot be combined with vad_model.
+     */
+    int32_t caller_boundaries;
 } edge_stt_session_opts;
 
 /**

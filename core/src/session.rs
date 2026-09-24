@@ -1,14 +1,14 @@
 //! A caller-fed, open-ended audio stream. Where `transcribe`/
 //! `transcribe_with` take one complete recording, this takes samples
-//! as they arrive and decides for itself where one utterance ends --
-//! then runs the exact same decode path either way.
+//! as they arrive and ends an utterance where its boundaries say --
+//! found here, or left to the caller -- then decodes it the same way.
 
 use std::time::Duration;
 
 use crate::EdgeStt;
 use crate::backend::LiveDecoder;
 use crate::cancel::CancelToken;
-use crate::config::SessionConfig;
+use crate::config::{Boundaries, SessionConfig};
 use crate::endpoint::Endpointer;
 use crate::error::Result;
 use crate::live::InterimGate;
@@ -26,8 +26,11 @@ enum State {
 
 pub struct AudioSession<'a> {
     stt: &'a EdgeStt,
-    /// Absent only for a recognizer that finds its own boundaries.
+    /// Absent for a recognizer that finds its own boundaries, and for
+    /// a caller that decides them.
     endpointer: Option<Box<dyn Endpointer + 'a>>,
+    /// Whether only `close` and the maximum duration end an utterance.
+    caller_bounded: bool,
     /// Present only when the caller asked for words while speech
     /// continues, so a caller who did not pays nothing for this.
     live: Option<Box<dyn LiveDecoder>>,
@@ -36,7 +39,7 @@ pub struct AudioSession<'a> {
     /// decoder may be present without this, to find boundaries.
     wants_interims: bool,
     /// Everything heard in the utterance in progress. Kept whenever a
-    /// decoder is present, since it works on the whole utterance.
+    /// decoder needs it or no detector is holding it instead.
     utterance: Vec<i16>,
     seq: u32,
     max_duration: Duration,
@@ -59,6 +62,7 @@ impl<'a> AudioSession<'a> {
         Self {
             stt,
             endpointer,
+            caller_bounded: matches!(config.boundaries, Boundaries::Caller),
             live,
             gate: InterimGate::new(config.interim_min_interval),
             wants_interims: config.live_interims,
@@ -73,7 +77,8 @@ impl<'a> AudioSession<'a> {
     /// Feeds one piece of newly-captured audio. Delivers a `Transcript`
     /// the moment the endpointer -- or the same maximum-duration
     /// ceiling a pre-bounded utterance is already held to -- considers
-    /// one utterance finished; otherwise `None`, with the audio staying
+    /// one utterance finished. With boundaries left to the caller only
+    /// the ceiling can. Otherwise `None`, with the audio staying
     /// buffered for the next call. `on_partial` is `None` exactly like
     /// `transcribe` (as opposed to `transcribe_with`): a caller that
     /// asks for nothing registers no callback with the decoder and
@@ -88,7 +93,7 @@ impl<'a> AudioSession<'a> {
         }
 
         self.buffered += sample_duration(samples.len());
-        if self.live.is_some() {
+        if self.live.is_some() || self.endpointer.is_none() {
             self.utterance.extend_from_slice(samples);
         }
 
@@ -102,7 +107,9 @@ impl<'a> AudioSession<'a> {
             if let Some(finished) = endpointer.push(samples)? {
                 return self.finish(finished, on_partial).map(Some);
             }
-        } else if let Some(at) = self.live.as_ref().and_then(|decoder| decoder.boundary()) {
+        } else if !self.caller_bounded
+            && let Some(at) = self.live.as_ref().and_then(|decoder| decoder.boundary())
+        {
             let finished = self.utterance[..at.min(self.utterance.len())].to_vec();
             return self.finish(finished, on_partial).map(Some);
         }
@@ -270,10 +277,14 @@ mod tests {
     }
 
     impl Backend for Fake {
-        fn transcribe(&self, _: &Utterance<'_>, _: &mut Work<'_, '_>) -> Result<Transcript> {
+        fn transcribe(
+            &self,
+            utterance: &Utterance<'_>,
+            _: &mut Work<'_, '_>,
+        ) -> Result<Transcript> {
             Ok(Transcript::empty(
                 Language::new("en"),
-                Duration::ZERO,
+                utterance.duration(),
                 Duration::ZERO,
                 BackendKind::Local,
             ))
@@ -482,6 +493,84 @@ mod tests {
         // The default ceiling is five minutes, and a push is a tenth of
         // a second, so it should land there rather than anywhere else.
         assert_eq!(closed_after, 3_000);
+    }
+
+    #[test]
+    fn a_caller_bounded_session_opens_without_a_detector() {
+        let stt = unable();
+        let mut session = stt
+            .open_session(SessionConfig::new().with_caller_boundaries())
+            .expect("a caller deciding the boundaries needs no detector");
+
+        for _ in 0..30 {
+            let early = session.push(&quiet(1_600), None).expect("a push");
+            assert!(early.is_none(), "nothing but close should end it");
+        }
+        let finished = session
+            .close(None)
+            .expect("a close")
+            .expect("the utterance");
+        assert_eq!(finished.audio_duration, Duration::from_secs(3));
+    }
+
+    #[test]
+    fn a_caller_bounded_session_ignores_where_the_recognizer_stops() {
+        let stt = self_endpointing(3_200);
+        let config = SessionConfig::new()
+            .with_caller_boundaries()
+            .with_live_interims()
+            .with_interim_min_interval(Duration::from_nanos(1));
+        let mut session = stt.open_session(config).unwrap();
+
+        let mut seen: Vec<String> = Vec::new();
+        {
+            let mut sink = |partial: Partial| seen.push(partial.text);
+            for _ in 0..4 {
+                let early = session.push(&quiet(1_600), Some(&mut sink)).unwrap();
+                assert!(early.is_none(), "the recognizer ended it");
+            }
+        }
+        assert_eq!(seen, vec!["and so"], "interims should still arrive");
+        let finished = session.close(None).unwrap().expect("the utterance");
+        assert_eq!(finished.audio_duration, Duration::from_millis(400));
+    }
+
+    #[test]
+    fn a_caller_bounded_session_is_still_held_to_the_ceiling() {
+        let stt = unable();
+        let mut session = stt
+            .open_session(SessionConfig::new().with_caller_boundaries())
+            .unwrap();
+
+        let mut closed_after = None;
+        for pushed in 1..=4_000 {
+            if session.push(&quiet(1_600), None).expect("a push").is_some() {
+                closed_after = Some(pushed);
+                break;
+            }
+        }
+        assert_eq!(closed_after, Some(3_000));
+        assert!(
+            session.close(None).unwrap().is_none(),
+            "the ceiling should have taken everything"
+        );
+    }
+
+    #[test]
+    fn closing_a_caller_bounded_session_with_nothing_heard_delivers_nothing() {
+        let stt = unable();
+        let mut session = stt
+            .open_session(SessionConfig::new().with_caller_boundaries())
+            .unwrap();
+        assert!(
+            session.close(None).unwrap().is_none(),
+            "nothing was pushed, so there is nothing to deliver"
+        );
+        assert!(session.push(&quiet(1_600), None).unwrap().is_none());
+        assert!(
+            session.close(None).unwrap().is_none(),
+            "a closed session took audio"
+        );
     }
 
     #[test]

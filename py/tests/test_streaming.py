@@ -90,3 +90,23 @@ def test_only_one_session_may_be_open_at_a_time():
         first.close()
         # Freed by closing the first: a second one can now be opened.
         stt.open_session(vad_model=vad_model_path()).close()
+
+
+def test_boundaries_come_from_a_vad_model_or_the_caller_not_both():
+    with edge_stt.EdgeStt(model=model_path()) as stt:
+        with pytest.raises(edge_stt.InvalidValueError):
+            stt.open_session(vad_model="/no/such/vad.bin", caller_boundaries=True)
+
+
+def test_a_caller_bounded_session_delivers_only_at_close():
+    samples = sample_wav_samples()
+    with edge_stt.EdgeStt(model=model_path()) as stt:
+        with stt.open_session(caller_boundaries=True) as session:
+            chunk = 1_600 * 2
+            for start in range(0, len(samples), chunk):
+                assert session.push(samples[start : start + chunk]) is None
+            transcript = session.close()
+
+    assert transcript is not None
+    assert transcript.audio_duration == pytest.approx(len(samples) / 32_000)
+    assert transcript.text.strip() != ""
