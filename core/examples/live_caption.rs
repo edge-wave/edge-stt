@@ -10,13 +10,17 @@
 //!                     [--interim-ms N] [--threads N]
 //!                     <model> <vad model> <wav>
 //!        live_caption --server ws://host:8000/api/v1/transcribe
-//!                     [--interim-ms N] <wav>
+//!                     [--interim-ms N] [--whole] <wav>
+//!
+//! `--whole` sends nothing until the recording has played out, then all
+//! of it in one request, as a caller that does not stream would.
 
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use edge_stt_core::{
     Config, EdgeStt, EndpointConfig, Language, ModelSpec, Partial, RemoteConfig, SessionConfig,
+    Utterance,
 };
 
 const SAMPLE_RATE: usize = 16_000;
@@ -31,11 +35,13 @@ fn main() -> ExitCode {
     let mut interim_ms = 300u64;
     let mut threads = None;
     let mut server = None;
+    let mut whole = false;
     let mut positional = Vec::new();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--server" => server = args.next(),
+            "--whole" => whole = true,
             "--language" => language = args.next(),
             "--pause-tolerance-ms" => {
                 pause_ms = args.next().and_then(|v| v.parse().ok()).unwrap_or(pause_ms)
@@ -55,7 +61,7 @@ fn main() -> ExitCode {
         eprintln!(
             "usage: live_caption [--language ko] [--pause-tolerance-ms N] \
              [--interim-ms N] [--threads N] <model> <vad model> <wav>\n       \
-             live_caption --server <endpoint> [--interim-ms N] <wav>"
+             live_caption --server <endpoint> [--interim-ms N] [--whole] <wav>"
         );
         return ExitCode::FAILURE;
     }
@@ -89,6 +95,27 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
+    // The comparison: nothing sent until the speaker stops, then all of it.
+    if whole {
+        let held = Duration::from_secs_f64(samples.len() as f64 / SAMPLE_RATE as f64);
+        std::thread::sleep(held);
+        let stopped = Instant::now();
+        return match stt.transcribe(&Utterance::mono_16k(&samples)) {
+            Ok(transcript) => {
+                println!(
+                    "  {:>8.2?}  ==   {}",
+                    held + stopped.elapsed(),
+                    transcript.text
+                );
+                ExitCode::SUCCESS
+            }
+            Err(why) => {
+                eprintln!("{why}");
+                ExitCode::FAILURE
+            }
+        };
+    }
 
     let session = match server {
         Some(_) => SessionConfig::new().with_caller_boundaries(),

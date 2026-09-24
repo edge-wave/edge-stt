@@ -172,6 +172,88 @@ boundary detector waits out `pause_tolerance_ms` of silence first —
 three seconds by default, five times the largest number in the table.
 Tuning that is worth more to a caller than the choice of model.
 
+#### Through the library, with the caller deciding the boundaries
+
+The runs above drove the wire directly. These go through the library
+itself: `live_caption --server`, built on the board with only `remote`
+and `streaming`, opens a session whose boundaries the caller decides,
+pushes the recording at capture rate with interims asked for, and closes
+when it ends. The server is the M4 Pro running `small-q5_1` with the
+language named and `--threads 6`; the board reaches it over Wi-Fi on
+one LAN at 8 ms round trip. `--whole` is the comparison: nothing sent
+until the recording has played out, then all of it in one request. Median
+of five, range in brackets, the board cooled below 58 °C before each.
+
+| Recording | Streamed while speaking | Sent whole at the end | The board alone, `tiny` |
+|---|---|---|---|
+| English, 5.66 s | 0.59 s [0.58–0.69] | 1.84 s [1.68–2.52] | 28.4 s [20.5–29.2] |
+| English, 11.0 s | 0.70 s [0.54–1.29] | 1.92 s [1.07–2.11] | 95.2 s [87.3–99.1] |
+
+Each cell is the wait after the recording ended. The last column is the
+same example on the board with the on-device detector at a 1 s pause
+tolerance and interims asked for, three runs; it ended at 82.7 °C.
+
+**Streaming leaves only the recognition.** Twice the speech added
+0.11 s to the wait, not twice the wait, because the audio is already on
+the server when the caller closes. The first interim arrived 1.10 s
+after the first push for both recordings — words on screen while the
+sentence is still being said, from a board that cannot produce them
+itself.
+
+**The board spends almost nothing.** Processor time for a whole
+streamed session was 0.04 s for 5.66 s of speech and 0.06 s for 11 s.
+The same session on the board, with interims, took 119 s and 364 s of
+processor time, fell behind by a minute and a half, and ran hot enough
+to matter; the device table above already said `tiny` alone barely
+keeps up, and repeated recognition on top of it does not.
+
+**Sending the whole recording at the end costs more from the board than
+from the host, and why is not known.** From the host the same request
+waits 0.53 s. From the board a fresh connection takes 10–15 ms and
+opening a stream 20–30 ms, so neither the link nor the handshake
+accounts for the extra second; keeping the Wi-Fi awake with pings during
+the request shortened it only partly. A streamed session never pays it,
+whatever it is, which is reason enough to prefer one on this board.
+
+#### Building a client that only talks to a server
+
+The same `live_caption` example, a clean release build on the board:
+
+| Features | Build | Binary |
+|---|---|---|
+| `remote,streaming` | 87 s | 1.71 MB |
+| `full` (adds whisper.cpp) | 279 s | 3.02 MB |
+
+The thin build needs no cmake and no C++ toolchain at all, which on a
+fresh board is also the part that fails first.
+
+#### Pauses inside one utterance
+
+A caller that decides the boundaries hands over everything from the
+wake word to the end as one utterance, pauses included. Two English
+recordings joined by silence and recognised whole, against the same two
+recognised apart, on the M4 Pro:
+
+| Model | 0.5 s | 1 s | 2 s | 3 s |
+|---|---|---|---|---|
+| `tiny-q5_1` | all 42 words | all | all | all |
+| `base-q5_1` | all | all | all | all |
+| `small-q5_1` | all | all | all | 22 of 42 |
+
+That table is one pair in one order. Swapping the order, the second
+recording was dropped by every model at some pause length and by `small`
+at every one, including with no pause at all: `small` returned the first
+sentence and stopped. So the pause is not the cause. Whisper sometimes
+ends a decode after the first of two sentences, and the longer the
+utterance handed to it, the more room it has to. The same audio through
+`transcribe` does the same, so this is not the session; it has not yet
+been checked against whisper.cpp's own binary.
+
+What it means for choosing boundaries: a short request after a wake
+word is one sentence and is safe to hand over whole. For longer speech,
+let the server's detector split it at its pauses, so each piece is
+recognised on its own.
+
 ### Window passes, Apple M4 Pro, processor
 
 What one pass over a partial utterance costs, taken with
@@ -437,8 +519,8 @@ and finished in 1.9 s once each session was given half of them.
 
 ## Still to measure
 
-Both halves of the reference pair are above. Two things are still
-missing, and neither is a matter of reading:
+Both halves of the reference pair are above. What is still missing is
+not a matter of reading:
 
 - **The sizes a server would run.** `medium` and `large-v3` are on
   neither machine's disk, so the ladder stops at `small`.
@@ -449,6 +531,11 @@ missing, and neither is a matter of reading:
   one local network with a direct path. What a relayed or distant link
   adds is not known, and it is the case where the answer's single round
   trip stops being free.
+- **Why a whole recording sent from the board waits a second longer**
+  than the same request from the host, when neither the link nor the
+  handshake explains it.
+- **Whether whisper.cpp's own binary also drops a second sentence**, and
+  which decoding setting, if any, keeps it.
 
 The window-pass figures cover both machines, but only in English and
 only for the three smallest models. Korean window passes on the board
