@@ -83,14 +83,35 @@ for transcript in session.close(None)? {
 }
 ```
 
-It works the same way against the remote backend: the boundaries are
-still found on this side, and each finished utterance goes to the
-server whole. `vad_model` is a second, separate
-model file — see [Models](#models) below — and `pause_tolerance`
-(`EndpointConfig::with_pause_tolerance`) trades responsiveness against
-the risk of splitting a natural mid-sentence pause; the default is a
-few seconds, the same order of magnitude edge-ear uses for its own
-end-of-speech detection.
+The VAD model is a second, separate model file — see [Models](#models)
+below — and `pause_tolerance` (`EndpointConfig::with_pause_tolerance`)
+trades responsiveness against the risk of splitting a natural
+mid-sentence pause; the default is a few seconds, the same order of
+magnitude edge-ear uses for its own end-of-speech detection.
+
+### On the network path
+
+Against a server, the same session is one stream the server runs
+whole: each pushed piece goes up as it is pushed, and interims and
+finals come back during your own `push` and `close` calls. Nothing on
+the device detects boundaries, so a thin client needs no VAD model —
+and, built with `remote` and `streaming` alone, no whisper.cpp either.
+
+| Boundaries | On the device | On the network path |
+|---|---|---|
+| `with_endpointing(..)` | the on-device VAD model you name | the server's own VAD model; only `pause_tolerance` is sent |
+| `with_caller_boundaries()` | nothing detects; `close` ends it | the same, with the server's detector turned off |
+
+The on-device model in `EndpointConfig::with_local_vad_model` is read
+only when a session runs on the device, including one that falls back
+there because the server could not be reached when it opened. A link
+that fails after that is reported, not retried on the device.
+
+Which to choose: leave the boundaries to the caller for short requests
+whose end a front end already announces, such as a command after a
+wake word. For long speech, let the server's detector split it: it
+recognizes each piece at its pause, so less is left after the speaker
+stops, and `close` hands back every piece still outstanding.
 
 ### When the caller already knows where speech stops
 
@@ -278,7 +299,20 @@ with stt.open_session(vad_model="models/ggml-silero-v5.1.2.bin") as session:
 
 Both `push` and `close` take an optional `on_partial` callback, same as the Rust and C APIs
 -- the utterance `close` finalizes decodes the same way `push` does, so interim results can
-still arrive from it too.
+still arrive from it too. `close` returns a list: every transcript not yet returned.
+
+Name a server instead of a model to send recognition there:
+
+```python
+with EdgeStt(server="ws://host:8000/api/v1/transcribe", credential=token) as stt:
+    with stt.open_session(caller_boundaries=True, live_interims=True) as session:
+        for chunk in chunks_while_recording():
+            session.push(chunk, on_partial=show)
+        transcripts = session.close()
+```
+
+`fallback_model=` names a model to decode on this device instead when
+the server cannot be reached as the session opens.
 
 ## C
 
@@ -294,7 +328,10 @@ turns the same header into HTML.
 Continuous input is a second handle, opened from the first:
 
 ```c
-edge_stt_session_h session = edge_stt_session_new(stt, "models/ggml-silero-v5.1.2.bin", 0);
+edge_stt_session_opts opts = {0};
+opts.struct_size = sizeof(opts);
+opts.vad_model = "models/ggml-silero-v5.1.2.bin";
+edge_stt_session_h session = edge_stt_session_new(stt, &opts);
 edge_stt_session_set_transcript_cb(session, on_transcript, NULL);
 edge_stt_session_push(session, samples, count);
 /* ...more pushes as audio arrives... */
@@ -303,11 +340,18 @@ edge_stt_session_free(session);
 ```
 
 `on_transcript` receives an owned `edge_stt_transcript_h` per finished
-utterance, freed the same way `edge_stt_transcribe`'s does. `0` for
-the last argument to `edge_stt_session_new` means the documented
-default pause tolerance. `edge_stt_session_set_partial_cb` is this
-session's own partial slot, independent of the handle's -- set it the
-same way if interim results are wanted while a push or close decodes.
+utterance, freed the same way `edge_stt_transcribe`'s does. Fields
+left at zero take their documented defaults. `edge_stt_session_set_partial_cb`
+is this session's own partial slot, independent of the handle's -- set
+it the same way if interim results are wanted while a push or close
+decodes.
+
+To send recognition to a server, call `edge_stt_connect(stt,
+"ws://host:8000/api/v1/transcribe")` where you would call
+`edge_stt_load_model`, after `edge_stt_set_credential` and, if the
+device should decode when the server cannot be reached,
+`edge_stt_set_fallback_model`. Sessions open on it the same way; set
+`caller_boundaries`, or `detect_boundaries` for the server's own VAD.
 
 ## Licence
 
