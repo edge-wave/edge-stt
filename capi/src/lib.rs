@@ -12,7 +12,7 @@ use std::ffi::{c_char, c_void};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use edge_stt_core::{CancelToken, Config, EdgeStt, Language, ModelSpec, Utterance};
+use edge_stt_core::{CancelToken, Config, EdgeStt, Language, ModelSpec, RemoteConfig, Utterance};
 
 use convert::{edge_stt_transcript_handle, out_box, required_str};
 use error::*;
@@ -45,6 +45,9 @@ struct Settings {
     language: Option<String>,
     timeout: Option<Duration>,
     partial: (edge_stt_partial_cb, usize),
+    credential: Option<String>,
+    connect_timeout: Option<Duration>,
+    fallback_model: Option<String>,
 }
 
 /// Run a body against a handle, or report a null one.
@@ -147,6 +150,117 @@ pub unsafe extern "C" fn edge_stt_load_model(stt: edge_stt_h, path: *const c_cha
         };
         let held = settings(handle);
         let mut config = Config::local(ModelSpec::at(path));
+        if let Some(tag) = &held.language {
+            config = config.with_language(Language::new(tag));
+        }
+        if let Some(limit) = held.timeout {
+            config = config.with_timeout(limit);
+        }
+        drop(held);
+
+        match EdgeStt::new(config) {
+            Ok(built) => {
+                *lock(&handle.core) = Some(built);
+                ok()
+            }
+            Err(why) => fail(&why),
+        }
+    })
+}
+
+/// @brief Set the credential edge_stt_connect presents to the server.
+///
+/// @param[in] stt the handle
+/// @param[in] credential the shared secret, or NULL for none
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+/// @see edge_stt_connect
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn edge_stt_set_credential(
+    stt: edge_stt_h,
+    credential: *const c_char,
+) -> i32 {
+    with!(stt, handle => {
+        let chosen = if credential.is_null() {
+            None
+        } else {
+            match required_str(credential, "credential") {
+                Ok(secret) => Some(secret.to_string()),
+                Err(code) => return code,
+            }
+        };
+        settings(handle).credential = chosen;
+        ok()
+    })
+}
+
+/// @brief Give up on reaching the server after this long.
+///
+/// @param[in] stt the handle
+/// @param[in] milliseconds the limit, or zero for the documented default
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+/// @see edge_stt_connect
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn edge_stt_set_connect_timeout(stt: edge_stt_h, milliseconds: u64) -> i32 {
+    with!(stt, handle => {
+        settings(handle).connect_timeout =
+            (milliseconds > 0).then(|| Duration::from_millis(milliseconds));
+        ok()
+    })
+}
+
+/// @brief Name a model to decode on this device when the server cannot
+///        be reached. Without one, that failure is returned instead.
+///
+/// @param[in] stt the handle
+/// @param[in] path the ggml file, loaded at edge_stt_connect, or NULL
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+/// @see edge_stt_connect
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn edge_stt_set_fallback_model(stt: edge_stt_h, path: *const c_char) -> i32 {
+    with!(stt, handle => {
+        let chosen = if path.is_null() {
+            None
+        } else {
+            match required_str(path, "path") {
+                Ok(path) => Some(path.to_string()),
+                Err(code) => return code,
+            }
+        };
+        settings(handle).fallback_model = chosen;
+        ok()
+    })
+}
+
+/// @brief Send recognition to a server instead of loading a model: the
+///        counterpart of edge_stt_load_model for the network path.
+///
+/// Uses the language, timeout, credential, connect timeout, and fallback
+/// model already set on the handle. A fallback model is loaded now; the
+/// server is first reached by a transcription or a session.
+///
+/// @param[in] stt the handle
+/// @param[in] endpoint the server's websocket address
+/// @return #EDGE_STT_OK, or a negative #edge_stt_error.
+/// @see edge_stt_set_credential, edge_stt_set_fallback_model, edge_stt_new
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn edge_stt_connect(stt: edge_stt_h, endpoint: *const c_char) -> i32 {
+    with!(stt, handle => {
+        let endpoint = match required_str(endpoint, "endpoint") {
+            Ok(endpoint) => endpoint,
+            Err(code) => return code,
+        };
+        let held = settings(handle);
+        let mut remote = RemoteConfig::at(endpoint);
+        if let Some(secret) = &held.credential {
+            remote = remote.with_credential(secret.as_str());
+        }
+        if let Some(limit) = held.connect_timeout {
+            remote = remote.with_connect_timeout(limit);
+        }
+        let mut config = Config::remote(remote);
+        if let Some(path) = &held.fallback_model {
+            config = config.with_fallback_to_local(ModelSpec::at(path));
+        }
         if let Some(tag) = &held.language {
             config = config.with_language(Language::new(tag));
         }
