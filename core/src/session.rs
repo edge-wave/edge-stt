@@ -1,12 +1,12 @@
 //! A caller-fed, open-ended audio stream. Where `transcribe`/
 //! `transcribe_with` take one complete recording, this takes samples
 //! as they arrive and ends an utterance where its boundaries say --
-//! found here, or left to the caller -- then decodes it the same way.
+//! found here, left to the caller, or run whole by a server.
 
 use std::time::Duration;
 
 use crate::EdgeStt;
-use crate::backend::LiveDecoder;
+use crate::backend::{Backend, HostedStream, LiveDecoder};
 use crate::cancel::CancelToken;
 use crate::config::{Boundaries, SessionConfig};
 use crate::endpoint::Endpointer;
@@ -26,6 +26,12 @@ enum State {
 
 pub struct AudioSession<'a> {
     stt: &'a EdgeStt,
+    /// Present when a server runs the whole session, and then every
+    /// field below it goes unused.
+    hosted: Option<Box<dyn HostedStream>>,
+    /// Decodes each finished utterance. The on-device half of a fallback
+    /// when the server could not be reached, so it is never retried.
+    recognizer: &'a dyn Backend,
     /// Absent for a recognizer that finds its own boundaries, and for
     /// a caller that decides them.
     endpointer: Option<Box<dyn Endpointer + 'a>>,
@@ -54,6 +60,7 @@ impl<'a> AudioSession<'a> {
     #[cfg(feature = "streaming")]
     pub(crate) fn new(
         stt: &'a EdgeStt,
+        recognizer: &'a dyn Backend,
         endpointer: Option<Box<dyn Endpointer + 'a>>,
         live: Option<Box<dyn LiveDecoder>>,
         config: &SessionConfig,
@@ -61,6 +68,8 @@ impl<'a> AudioSession<'a> {
     ) -> Self {
         Self {
             stt,
+            hosted: None,
+            recognizer,
             endpointer,
             caller_bounded: matches!(config.boundaries, Boundaries::Caller),
             live,
@@ -72,6 +81,20 @@ impl<'a> AudioSession<'a> {
             buffered: Duration::ZERO,
             state: State::Buffering,
         }
+    }
+
+    /// A session a server runs whole; this side only carries audio up
+    /// and hands back what comes down.
+    #[cfg(feature = "streaming")]
+    pub(crate) fn hosted(
+        stt: &'a EdgeStt,
+        stream: Box<dyn HostedStream>,
+        config: &SessionConfig,
+        max_duration: Duration,
+    ) -> Self {
+        let mut session = Self::new(stt, stt.backend(), None, None, config, max_duration);
+        session.hosted = Some(stream);
+        session
     }
 
     /// Feeds one piece of newly-captured audio. Delivers a `Transcript`
@@ -90,6 +113,9 @@ impl<'a> AudioSession<'a> {
     ) -> Result<Option<Transcript>> {
         if self.state == State::Closed {
             return Ok(None);
+        }
+        if let Some(stream) = self.hosted.as_mut() {
+            return stream.push(samples, on_partial);
         }
 
         self.buffered += sample_duration(samples.len());
@@ -125,23 +151,27 @@ impl<'a> AudioSession<'a> {
         Ok(None)
     }
 
-    /// Finalizes and delivers whatever utterance was in progress, then
-    /// closes the session. A second call is a no-op returning `Ok(None)`,
-    /// not an error. `on_partial` behaves exactly as it does for `push`:
-    /// the finalized utterance decodes like any other, and can still
-    /// have interim results on the way to its `Transcript`.
+    /// Finalizes whatever utterance was in progress, closes the session,
+    /// and hands back every transcript not yet delivered, in the order
+    /// spoken. On this device that is at most one; a server finding its
+    /// own boundaries may still have one on its way while this finishes
+    /// the next, and neither is lost. A second call returns nothing, not
+    /// an error. `on_partial` behaves exactly as it does for `push`.
     pub fn close(
         &mut self,
         on_partial: Option<&mut dyn FnMut(Partial)>,
-    ) -> Result<Option<Transcript>> {
+    ) -> Result<Vec<Transcript>> {
         if self.state == State::Closed {
-            return Ok(None);
+            return Ok(Vec::new());
         }
         self.state = State::Closed;
+        if let Some(stream) = self.hosted.as_mut() {
+            return stream.close(on_partial);
+        }
 
         match self.take_everything() {
-            Some(finished) => self.finish(finished, on_partial).map(Some),
-            None => Ok(None),
+            Some(finished) => self.finish(finished, on_partial).map(|t| vec![t]),
+            None => Ok(Vec::new()),
         }
     }
 
@@ -222,7 +252,8 @@ impl<'a> AudioSession<'a> {
 
         let utterance = Utterance::mono_16k(&samples);
         let cancel = CancelToken::new();
-        self.stt.run(&utterance, on_partial, &cancel)
+        self.stt
+            .run_on(self.recognizer, &utterance, on_partial, &cancel)
     }
 }
 
@@ -314,6 +345,7 @@ mod tests {
                 live_interims: true,
                 revises: true,
                 self_endpointing: true,
+                hosts_sessions: false,
             },
             lines: lines.iter().map(|line| line.to_string()).collect(),
             closes_at: 0,
@@ -328,6 +360,7 @@ mod tests {
                 live_interims: true,
                 revises: true,
                 self_endpointing: true,
+                hosts_sessions: false,
             },
             lines: vec!["and so".to_string()],
             closes_at,
@@ -506,11 +539,9 @@ mod tests {
             let early = session.push(&quiet(1_600), None).expect("a push");
             assert!(early.is_none(), "nothing but close should end it");
         }
-        let finished = session
-            .close(None)
-            .expect("a close")
-            .expect("the utterance");
-        assert_eq!(finished.audio_duration, Duration::from_secs(3));
+        let finished = session.close(None).expect("a close");
+        assert_eq!(finished.len(), 1, "one utterance, one transcript");
+        assert_eq!(finished[0].audio_duration, Duration::from_secs(3));
     }
 
     #[test]
@@ -531,7 +562,7 @@ mod tests {
             }
         }
         assert_eq!(seen, vec!["and so"], "interims should still arrive");
-        let finished = session.close(None).unwrap().expect("the utterance");
+        let finished = session.close(None).unwrap().pop().expect("the utterance");
         assert_eq!(finished.audio_duration, Duration::from_millis(400));
     }
 
@@ -551,7 +582,7 @@ mod tests {
         }
         assert_eq!(closed_after, Some(3_000));
         assert!(
-            session.close(None).unwrap().is_none(),
+            session.close(None).unwrap().is_empty(),
             "the ceiling should have taken everything"
         );
     }
@@ -563,12 +594,12 @@ mod tests {
             .open_session(SessionConfig::new().with_caller_boundaries())
             .unwrap();
         assert!(
-            session.close(None).unwrap().is_none(),
+            session.close(None).unwrap().is_empty(),
             "nothing was pushed, so there is nothing to deliver"
         );
         assert!(session.push(&quiet(1_600), None).unwrap().is_none());
         assert!(
-            session.close(None).unwrap().is_none(),
+            session.close(None).unwrap().is_empty(),
             "a closed session took audio"
         );
     }

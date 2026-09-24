@@ -81,47 +81,62 @@ impl EdgeStt {
     pub fn open_session(&self, config: impl Into<SessionConfig>) -> Result<AudioSession<'_>> {
         let config = config.into();
         config.check()?;
-        let can = self.backend.capabilities();
 
+        if !self.backend.capabilities().hosts_sessions {
+            return self.open_local(&*self.backend, &config);
+        }
+        if matches!(config.boundaries, Boundaries::Recognizer) {
+            return Err(no_boundaries());
+        }
+        match self.backend.open_hosted(&config)? {
+            backend::Opened::Hosted(stream) => Ok(AudioSession::hosted(
+                self,
+                stream,
+                &config,
+                self.config.max_duration,
+            )),
+            backend::Opened::Local(fallen_back) => self.open_local(fallen_back, &config),
+        }
+    }
+
+    /// A session whose boundaries are found, and whose utterances are
+    /// decoded, on this device by `recognizer`.
+    #[cfg(feature = "streaming")]
+    fn open_local<'a>(
+        &'a self,
+        recognizer: &'a dyn Backend,
+        config: &SessionConfig,
+    ) -> Result<AudioSession<'a>> {
+        let can = recognizer.capabilities();
         if config.live_interims && !can.live_interims {
             return Err(Error::InvalidValue {
                 setting: "live_interims",
                 expected: "a recognizer that can produce results while speech continues"
                     .to_string(),
-                got: format!("{}, which cannot", self.backend.kind()),
+                got: format!("{}, which cannot", recognizer.kind()),
             });
         }
 
         let endpointer = match (&config.boundaries, can.self_endpointing) {
-            (Boundaries::Detector(endpointing), _) => Some(Box::new(
-                endpoint::whisper_vad::WhisperVad::load(endpointing)?,
-            )
-                as Box<dyn endpoint::Endpointer>),
+            (Boundaries::Detector(endpointing), _) => Some(load_detector(endpointing)?),
             (Boundaries::Recognizer, true) | (Boundaries::Caller, _) => None,
-            (Boundaries::Recognizer, false) => {
-                return Err(Error::InvalidValue {
-                    setting: "endpointing",
-                    expected: "a boundary-detection model, a recognizer that finds its own \
-                               boundaries, or boundaries left to the caller"
-                        .to_string(),
-                    got: "none of them".to_string(),
-                });
-            }
+            (Boundaries::Recognizer, false) => return Err(no_boundaries()),
         };
 
         // Opened for boundaries as well as for early words: a
         // recognizer that endpoints itself has to hear the audio to do it.
         let finds_boundaries = matches!(config.boundaries, Boundaries::Recognizer);
         let live = match config.live_interims || finds_boundaries {
-            true => Some(self.backend.open_live()?),
+            true => Some(recognizer.open_live()?),
             false => None,
         };
 
         Ok(AudioSession::new(
             self,
+            recognizer,
             endpointer,
             live,
-            &config,
+            config,
             self.config.max_duration,
         ))
     }
@@ -133,8 +148,25 @@ impl EdgeStt {
         })
     }
 
+    #[cfg(feature = "streaming")]
+    pub(crate) fn backend(&self) -> &dyn Backend {
+        &*self.backend
+    }
+
     pub(crate) fn run(
         &self,
+        utterance: &Utterance<'_>,
+        on_partial: Option<&mut dyn FnMut(Partial)>,
+        cancel: &CancelToken,
+    ) -> Result<Transcript> {
+        self.run_on(&*self.backend, utterance, on_partial, cancel)
+    }
+
+    /// The same limits and timeout whichever backend decodes, so a
+    /// session that fell back to this device is held to them too.
+    pub(crate) fn run_on(
+        &self,
+        backend: &dyn Backend,
         utterance: &Utterance<'_>,
         on_partial: Option<&mut dyn FnMut(Partial)>,
         cancel: &CancelToken,
@@ -148,7 +180,7 @@ impl EdgeStt {
         let mut work = Work::new(cancel);
         work.timeout = self.config.timeout;
         work.on_partial = on_partial;
-        self.backend.transcribe(utterance, &mut work)
+        backend.transcribe(utterance, &mut work)
     }
 }
 
@@ -200,5 +232,28 @@ fn build_local(model: &ModelSpec, config: &Config) -> Result<Box<dyn Backend>> {
 
 #[cfg(not(feature = "whisper"))]
 fn build_local(_model: &ModelSpec, _config: &Config) -> Result<Box<dyn Backend>> {
+    Err(Error::BackendUnavailable { backend: "whisper" })
+}
+
+#[cfg(feature = "streaming")]
+fn no_boundaries() -> Error {
+    Error::InvalidValue {
+        setting: "endpointing",
+        expected: "a boundary-detection model, a recognizer that finds its own boundaries, \
+                   or boundaries left to the caller"
+            .to_string(),
+        got: "none of them".to_string(),
+    }
+}
+
+#[cfg(all(feature = "streaming", feature = "whisper"))]
+fn load_detector(config: &EndpointConfig) -> Result<Box<dyn endpoint::Endpointer>> {
+    Ok(Box::new(endpoint::whisper_vad::WhisperVad::load(config)?))
+}
+
+/// A build without the on-device recognizer has no device detector
+/// either, and never opens a device session to need one.
+#[cfg(all(feature = "streaming", not(feature = "whisper")))]
+fn load_detector(_config: &EndpointConfig) -> Result<Box<dyn endpoint::Endpointer>> {
     Err(Error::BackendUnavailable { backend: "whisper" })
 }

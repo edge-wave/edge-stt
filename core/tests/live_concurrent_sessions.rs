@@ -23,7 +23,7 @@ fn transcriber() -> EdgeStt {
 
 fn live() -> SessionConfig {
     SessionConfig::new()
-        .with_endpointing(EndpointConfig::new(support::vad_model_path()))
+        .with_endpointing(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .with_live_interims()
         .with_interim_min_interval(Duration::from_millis(200))
 }
@@ -38,7 +38,7 @@ fn drain(session: &mut AudioSession<'_>, samples: &[i16]) -> Vec<String> {
         }
     }
     let mut show = |_: Partial| {};
-    if let Some(transcript) = session.close(Some(&mut show)).expect("a close") {
+    for transcript in session.close(Some(&mut show)).expect("a close") {
         texts.push(transcript.text);
     }
     texts
@@ -78,11 +78,11 @@ fn interleaved_sessions_each_produce_what_they_produce_alone() {
         }
     }
     let mut show = |_: Partial| {};
-    if let Some(transcript) = one.close(Some(&mut show)).expect("a close") {
+    for transcript in one.close(Some(&mut show)).expect("a close") {
         texts_one.push(transcript.text);
     }
     let mut show = |_: Partial| {};
-    if let Some(transcript) = two.close(Some(&mut show)).expect("a close") {
+    for transcript in two.close(Some(&mut show)).expect("a close") {
         texts_two.push(transcript.text);
     }
 

@@ -32,6 +32,7 @@ fn pushing_a_recording_and_closing_matches_transcribing_it_whole() {
     let pushed = session
         .close(None)
         .expect("a close")
+        .pop()
         .expect("the utterance");
 
     assert_eq!(pushed.text, whole.text);

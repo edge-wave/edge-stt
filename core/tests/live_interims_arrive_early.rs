@@ -22,7 +22,7 @@ fn transcriber() -> EdgeStt {
 
 fn live_session() -> SessionConfig {
     SessionConfig::new()
-        .with_endpointing(EndpointConfig::new(support::vad_model_path()))
+        .with_endpointing(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .with_live_interims()
         .with_interim_min_interval(Duration::from_millis(200))
 }
@@ -72,7 +72,7 @@ fn a_session_that_did_not_ask_hears_nothing_early() {
     let (samples, _) = support::spoken_sample();
     let stt = transcriber();
     let mut session = stt
-        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .open_session(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .expect("a session");
 
     let mut seen = Vec::new();

@@ -122,8 +122,10 @@ pub fn spawn_continuous(
                         let _ = events_tx.send(ContinuousEvent::Partial(p));
                     };
                     let on_partial = want_partials.then_some(&mut sink as &mut dyn FnMut(Partial));
-                    if let Ok(Some(transcript)) = session.close(on_partial) {
-                        let _ = events_tx.send(ContinuousEvent::Final(transcript));
+                    if let Ok(transcripts) = session.close(on_partial) {
+                        for transcript in transcripts {
+                            let _ = events_tx.send(ContinuousEvent::Final(transcript));
+                        }
                     }
                     return;
                 }

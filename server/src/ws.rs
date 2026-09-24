@@ -73,7 +73,21 @@ async fn serve(mut socket: WebSocket, server: Arc<Server>) {
                         pause_tolerance_ms,
                         live_interims,
                         interim_min_interval_ms,
+                        boundaries,
                     } => {
+                        let caller_bounded = match boundaries.as_deref() {
+                            None | Some("server") => false,
+                            Some("caller") => true,
+                            Some(_) => {
+                                let refusal = error_message(
+                                    &request_id,
+                                    "invalid_request",
+                                    "boundaries is \"server\" or \"caller\"",
+                                );
+                                let _ = send(&mut socket, refusal).await;
+                                return;
+                            }
+                        };
                         if format != edge_stt_core::wire::WireFormat::mono_16k() {
                             let refusal = error_message(
                                 &request_id,
@@ -104,6 +118,7 @@ async fn serve(mut socket: WebSocket, server: Arc<Server>) {
                                 pause_tolerance_ms,
                                 live_interims,
                                 interim_min_interval_ms,
+                                caller_bounded,
                             },
                         )
                         .await;
@@ -159,6 +174,7 @@ async fn run(socket: &mut WebSocket, server: &Arc<Server>, mut session: Session)
             let accepted = ServerMessage::Accepted {
                 request_id: session.request_id.clone(),
                 queue_position: 0,
+                boundaries: None,
             };
             let _ = send(socket, accepted).await;
             permit
@@ -168,6 +184,7 @@ async fn run(socket: &mut WebSocket, server: &Arc<Server>, mut session: Session)
             let accepted = ServerMessage::Accepted {
                 request_id: session.request_id.clone(),
                 queue_position: position,
+                boundaries: None,
             };
             let _ = send(socket, accepted).await;
             permit
@@ -246,9 +263,6 @@ async fn run(socket: &mut WebSocket, server: &Arc<Server>, mut session: Session)
     }
 }
 
-/// Continuous input: audio arrives with no predetermined end, and the
-/// server -- not the caller -- decides utterance boundaries, sending
-/// `final` once per one it finds until `close_stream` or a disconnect.
 /// What a client asked for when it opened a stream.
 struct StreamRequest {
     request_id: String,
@@ -257,8 +271,12 @@ struct StreamRequest {
     pause_tolerance_ms: Option<u64>,
     live_interims: bool,
     interim_min_interval_ms: Option<u64>,
+    caller_bounded: bool,
 }
 
+/// Continuous input: audio arrives with no predetermined end, and
+/// `final` is sent once per utterance until `close_stream` or a
+/// disconnect -- found by this server's detector, or left to the caller.
 async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: StreamRequest) {
     let StreamRequest {
         request_id,
@@ -267,6 +285,7 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
         pause_tolerance_ms,
         live_interims,
         interim_min_interval_ms,
+        caller_bounded,
     } = request;
     let Some(stt) = server.transcriber() else {
         let refusal = error_message(
@@ -291,7 +310,8 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
         return;
     }
 
-    let Some(vad_model) = server.vad_model.clone() else {
+    let vad_model = server.vad_model.clone();
+    if !caller_bounded && vad_model.is_none() {
         let refusal = error_message(
             &request_id,
             "streaming_unavailable",
@@ -299,7 +319,8 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
         );
         let _ = send(socket, refusal).await;
         return;
-    };
+    }
+    let applied = Some(if caller_bounded { "caller" } else { "server" }.to_string());
 
     // Held for the whole session: it counts as one client, not a
     // per-utterance cost.
@@ -308,6 +329,7 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
             let accepted = ServerMessage::Accepted {
                 request_id: request_id.clone(),
                 queue_position: 0,
+                boundaries: applied.clone(),
             };
             let _ = send(socket, accepted).await;
             permit
@@ -316,6 +338,7 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
             let accepted = ServerMessage::Accepted {
                 request_id: request_id.clone(),
                 queue_position: position,
+                boundaries: applied.clone(),
             };
             let _ = send(socket, accepted).await;
             permit
@@ -333,11 +356,19 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
         }
     };
 
-    let mut endpointing = edge_stt_core::EndpointConfig::new(&vad_model);
-    if let Some(ms) = pause_tolerance_ms {
-        endpointing = endpointing.with_pause_tolerance(std::time::Duration::from_millis(ms));
+    let mut config = edge_stt_core::SessionConfig::new();
+    match vad_model {
+        Some(vad_model) if !caller_bounded => {
+            let mut endpointing =
+                edge_stt_core::EndpointConfig::new().with_local_vad_model(&vad_model);
+            if let Some(ms) = pause_tolerance_ms {
+                endpointing =
+                    endpointing.with_pause_tolerance(std::time::Duration::from_millis(ms));
+            }
+            config = config.with_endpointing(endpointing);
+        }
+        _ => config = config.with_caller_boundaries(),
     }
-    let mut config = edge_stt_core::SessionConfig::new().with_endpointing(endpointing);
     if live_interims {
         config = config.with_live_interims();
     }

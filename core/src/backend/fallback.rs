@@ -37,6 +37,7 @@ impl Backend for FallbackBackend {
             live_interims: primary.live_interims && local.live_interims,
             revises: primary.revises && local.revises,
             self_endpointing: primary.self_endpointing && local.self_endpointing,
+            hosts_sessions: primary.hosts_sessions,
         }
     }
 

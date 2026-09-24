@@ -63,6 +63,29 @@ pub struct Capabilities {
     pub revises: bool,
     /// It decides where an utterance ends without a separate detector.
     pub self_endpointing: bool,
+    /// It runs whole sessions itself, so nothing on this side detects
+    /// boundaries or decodes for them.
+    pub hosts_sessions: bool,
+}
+
+/// A whole session run elsewhere. Everything it produces is handed over
+/// during these calls, on the caller's own thread.
+pub trait HostedStream: Send {
+    fn push(
+        &mut self,
+        samples: &[i16],
+        on_partial: Option<&mut dyn FnMut(Partial)>,
+    ) -> Result<Option<Transcript>>;
+
+    fn close(&mut self, on_partial: Option<&mut dyn FnMut(Partial)>) -> Result<Vec<Transcript>>;
+}
+
+/// What asking a backend to host a session gave back.
+pub enum Opened<'a> {
+    Hosted(Box<dyn HostedStream>),
+    /// The host could not be reached, and this on-device backend runs
+    /// the session instead, for every utterance in it.
+    Local(&'a dyn Backend),
 }
 
 /// One session's own recognition state. Never shared between sessions,
@@ -105,6 +128,13 @@ pub trait Backend: Send + Sync {
             setting: "live_interims",
             expected: "a recognizer that can produce results while speech continues".to_string(),
             got: format!("{}, which cannot", self.kind()),
+        })
+    }
+
+    /// Only ever called after `capabilities` said it hosts sessions.
+    fn open_hosted(&self, _config: &crate::config::SessionConfig) -> Result<Opened<'_>> {
+        Err(crate::error::Error::BackendUnavailable {
+            backend: "a session host",
         })
     }
 }

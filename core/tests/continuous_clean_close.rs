@@ -20,7 +20,7 @@ fn closing_mid_utterance_finalizes_and_delivers_it() {
     let (samples, expected) = support::spoken_sample();
     let stt = transcriber();
     let mut session = stt
-        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .open_session(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .expect("a session");
 
     // Pushed in full, but never long enough to hit a natural pause or
@@ -37,6 +37,7 @@ fn closing_mid_utterance_finalizes_and_delivers_it() {
     let closed = session
         .close(None)
         .expect("a clean close")
+        .pop()
         .expect("the in-progress utterance");
     assert_eq!(closed.text.trim(), expected.trim());
 }
@@ -47,7 +48,7 @@ fn closing_mid_utterance_still_delivers_partials() {
     let (samples, _expected) = support::spoken_sample();
     let stt = transcriber();
     let mut session = stt
-        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .open_session(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .expect("a session");
     for chunk in samples.chunks(1_600) {
         session.push(chunk, None).expect("a push");
@@ -58,6 +59,7 @@ fn closing_mid_utterance_still_delivers_partials() {
     session
         .close(Some(&mut sink))
         .expect("a clean close")
+        .pop()
         .expect("the in-progress utterance");
     assert!(
         !seen.is_empty(),
@@ -71,7 +73,7 @@ fn a_second_close_is_a_no_op() {
     let (samples, _expected) = support::spoken_sample();
     let stt = transcriber();
     let mut session = stt
-        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .open_session(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .expect("a session");
     for chunk in samples.chunks(1_600) {
         session.push(chunk, None).expect("a push");
@@ -80,7 +82,7 @@ fn a_second_close_is_a_no_op() {
     session.close(None).expect("the first close");
     let second = session.close(None).expect("a second close must not error");
     assert!(
-        second.is_none(),
+        second.is_empty(),
         "a second close must return nothing, not re-deliver or error"
     );
 }

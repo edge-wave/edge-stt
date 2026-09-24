@@ -33,6 +33,23 @@ pub async fn start_streaming(capacity: usize) -> Running {
     start_streaming_with_threads(capacity, Some(half_the_cores())).await
 }
 
+/// A real model and no VAD model, the way a server serving only callers
+/// that decide their own boundaries can be started.
+pub async fn start_without_vad(capacity: usize) -> Running {
+    let running = start_with(
+        None,
+        capacity,
+        Some(model_path_env()),
+        None,
+        Some(half_the_cores()),
+    )
+    .await;
+    while !running.server.readiness.is_ready() {
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    running
+}
+
 /// What one recognition gets when a test is not measuring threads.
 /// Given every core, two live sessions on one machine contend at every
 /// node of the graph and neither finishes -- the case --threads exists

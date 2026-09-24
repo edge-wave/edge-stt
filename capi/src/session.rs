@@ -180,7 +180,7 @@ pub unsafe extern "C" fn edge_stt_session_new(
             Ok(path) => path,
             Err(_) => return std::ptr::null_mut(),
         };
-        let mut endpointing = EndpointConfig::new(vad_model);
+        let mut endpointing = EndpointConfig::new().with_local_vad_model(vad_model);
         if opts.pause_tolerance_ms > 0 {
             endpointing =
                 endpointing.with_pause_tolerance(Duration::from_millis(opts.pause_tolerance_ms));
@@ -314,6 +314,9 @@ pub unsafe extern "C" fn edge_stt_session_push(
 ///
 /// The utterance this finalizes decodes like any other: whatever is
 /// registered with edge_stt_session_set_partial_cb still runs for it.
+/// Every transcript not yet delivered reaches the transcript callback,
+/// once each and in order; against a server finding its own boundaries
+/// there may be more than one.
 ///
 /// @param[in] session the handle
 /// @return #EDGE_STT_OK, or a negative #edge_stt_error.
@@ -330,11 +333,12 @@ pub unsafe extern "C" fn edge_stt_session_close(session: edge_stt_session_h) -> 
         };
 
         match lock(&handle.session).close(on_partial) {
-            Ok(Some(transcript)) => {
-                notify(handle, &transcript);
+            Ok(transcripts) => {
+                for transcript in &transcripts {
+                    notify(handle, transcript);
+                }
                 ok()
             }
-            Ok(None) => ok(),
             Err(why) => fail(&why),
         }
     })

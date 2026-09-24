@@ -76,7 +76,8 @@ fn main() -> ExitCode {
 
     let session = SessionConfig::new()
         .with_endpointing(
-            EndpointConfig::new(&positional[1])
+            EndpointConfig::new()
+                .with_local_vad_model(&positional[1])
                 .with_pause_tolerance(Duration::from_millis(pause_ms)),
         )
         .with_live_interims()
@@ -120,10 +121,11 @@ fn main() -> ExitCode {
         println!("  {:>8.2?}  ...  {}", started.elapsed(), partial.text);
     };
     match session.close(Some(&mut show)) {
-        Ok(Some(transcript)) => {
-            println!("  {:>8.2?}  ==   {}", started.elapsed(), transcript.text)
+        Ok(transcripts) => {
+            for transcript in transcripts {
+                println!("  {:>8.2?}  ==   {}", started.elapsed(), transcript.text)
+            }
         }
-        Ok(None) => {}
         Err(why) => {
             eprintln!("{why}");
             return ExitCode::FAILURE;

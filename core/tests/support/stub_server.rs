@@ -4,8 +4,8 @@
 #![allow(dead_code)]
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -28,6 +28,56 @@ pub enum Behaviour {
     Stall,
     /// Accept and then fail.
     ServerError,
+    /// Host a continuous stream the way the script says.
+    Stream(StreamScript),
+}
+
+/// One thing the stub sends during a stream.
+#[derive(Debug, Clone)]
+pub enum Reply {
+    Partial(String),
+    Final(String),
+    Error(&'static str),
+}
+
+/// How a stream is answered. Everything it heard lands in `log`.
+#[derive(Debug, Clone, Default)]
+pub struct StreamScript {
+    /// What `accepted` echoes; `None` leaves the field out, as an older server does.
+    pub echo: Option<&'static str>,
+    /// Refuse the open with this error code instead of accepting it.
+    pub refuse: Option<&'static str>,
+    /// Sent once this many audio frames have arrived.
+    pub after_frames: Vec<(usize, Reply)>,
+    /// Sent on `close_stream`, before the connection ends.
+    pub on_close: Vec<Reply>,
+    /// Vanish once this many frames have arrived.
+    pub drop_after_frames: Option<usize>,
+    /// Never read past the open, so the client's writes back up.
+    pub stop_reading: bool,
+    pub log: Arc<Mutex<StreamLog>>,
+}
+
+/// What a stream's client sent, as the stub saw it.
+#[derive(Debug, Default)]
+pub struct StreamLog {
+    pub opened_with: Option<serde_json::Value>,
+    pub frames: usize,
+    pub frames_at_close: Option<usize>,
+}
+
+impl StreamScript {
+    /// A server from after caller-decided boundaries existed, echoing `echo`.
+    pub fn echoing(echo: &'static str) -> Self {
+        Self {
+            echo: Some(echo),
+            ..Self::default()
+        }
+    }
+
+    pub fn frames(&self) -> usize {
+        self.log.lock().expect("an unpoisoned log").frames
+    }
 }
 
 pub struct StubServer {
@@ -136,6 +186,13 @@ async fn serve(stream: tokio::net::TcpStream, behaviour: Behaviour, expected: Op
             let _ = send(&mut socket, json_cancelled(&request_id)).await;
             return;
         }
+        if kind == "open_stream"
+            && let Behaviour::Stream(script) = &behaviour
+        {
+            script.log.lock().expect("an unpoisoned log").opened_with = Some(parsed.clone());
+            host_stream(&mut socket, &request_id, script).await;
+            return;
+        }
         if kind != "end" {
             continue;
         }
@@ -167,9 +224,75 @@ async fn serve(stream: tokio::net::TcpStream, behaviour: Behaviour, expected: Op
             Behaviour::Stall => {
                 tokio::time::sleep(Duration::from_secs(120)).await;
             }
-            Behaviour::Unauthorized => {}
+            Behaviour::Unauthorized | Behaviour::Stream(_) => {}
         }
         return;
+    }
+}
+
+async fn host_stream(socket: &mut Socket, id: &str, script: &StreamScript) {
+    if let Some(code) = script.refuse {
+        let _ = send(socket, json_error(id, code, "refused")).await;
+        return;
+    }
+    let echo = script
+        .echo
+        .map(|value| format!(r#","boundaries":"{value}""#))
+        .unwrap_or_default();
+    let accepted = format!(r#"{{"type":"accepted","request_id":"{id}","queue_position":0{echo}}}"#);
+    if send(socket, accepted).await.is_err() {
+        return;
+    }
+    if script.stop_reading {
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        return;
+    }
+
+    let mut seq = 0;
+    while let Some(Ok(message)) = socket.next().await {
+        match message {
+            Message::Binary(_) => {
+                let frames = {
+                    let mut log = script.log.lock().expect("an unpoisoned log");
+                    log.frames += 1;
+                    log.frames
+                };
+                if script.drop_after_frames == Some(frames) {
+                    return;
+                }
+                for (after, reply) in &script.after_frames {
+                    if *after == frames {
+                        let _ = send(socket, reply_json(id, &mut seq, reply)).await;
+                    }
+                }
+            }
+            Message::Text(text) if text.contains("close_stream") => {
+                {
+                    let mut log = script.log.lock().expect("an unpoisoned log");
+                    log.frames_at_close = Some(log.frames);
+                }
+                for reply in &script.on_close {
+                    let _ = send(socket, reply_json(id, &mut seq, reply)).await;
+                }
+                let _ = socket.close(None).await;
+                return;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn reply_json(id: &str, seq: &mut u32, reply: &Reply) -> String {
+    match reply {
+        Reply::Partial(text) => {
+            *seq += 1;
+            format!(
+                r#"{{"type":"partial","request_id":"{id}","seq":{},"kind":"replace","text":"{text}","start_ms":0,"end_ms":0}}"#,
+                *seq - 1
+            )
+        }
+        Reply::Final(text) => json_final(id, text),
+        Reply::Error(code) => json_error(id, code, "failed"),
     }
 }
 

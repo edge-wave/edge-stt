@@ -271,16 +271,13 @@ impl PySession {
         .map_err(to_py)
     }
 
-    /// Finalizes and returns whatever utterance was in progress. A
-    /// second call returns `None` rather than raising. The utterance
-    /// this finalizes decodes like any other push -- `on_partial`
-    /// works the same way here too.
+    /// Finalizes whatever utterance was in progress and returns a list
+    /// of every transcript not yet returned, in order -- empty, one, or
+    /// against a server finding its own boundaries, more. A second call
+    /// returns an empty list rather than raising. `on_partial` works as
+    /// it does for `push`.
     #[pyo3(signature = (on_partial = None))]
-    fn close(
-        &self,
-        py: Python<'_>,
-        on_partial: Option<Py<PyAny>>,
-    ) -> PyResult<Option<PyTranscript>> {
+    fn close(&self, py: Python<'_>, on_partial: Option<Py<PyAny>>) -> PyResult<Vec<PyTranscript>> {
         py.detach(|| {
             let mut session = self.session.lock().expect("a lock nobody poisons");
             match &on_partial {
@@ -298,7 +295,7 @@ impl PySession {
                 None => session.close(None),
             }
         })
-        .map(|found| found.as_ref().map(to_python))
+        .map(|found| found.iter().map(to_python).collect())
         .map_err(to_py)
     }
 
@@ -423,7 +420,8 @@ impl PyEdgeStt {
                 ));
             }
             (Some(path), false) => {
-                let mut endpointing = edge_stt_core::EndpointConfig::new(path);
+                let mut endpointing =
+                    edge_stt_core::EndpointConfig::new().with_local_vad_model(path);
                 if let Some(seconds) = pause_tolerance {
                     endpointing =
                         endpointing.with_pause_tolerance(Duration::from_secs_f64(seconds));

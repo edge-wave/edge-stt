@@ -52,7 +52,7 @@ def test_a_session_is_a_context_manager_and_closing_twice_is_fine():
             for _ in range(3):
                 assert session.push(silence) is None
         # __exit__ already closed it; a second close is a no-op, not an error.
-        assert session.close() is None
+        assert session.close() == []
 
 
 def test_push_and_close_both_deliver_partials_for_real_speech():
@@ -72,7 +72,8 @@ def test_push_and_close_both_deliver_partials_for_real_speech():
                 )
                 if found is not None:
                     transcript = found
-            transcript = session.close(on_partial=seen.append) or transcript
+            closed = session.close(on_partial=seen.append)
+            transcript = closed[-1] if closed else transcript
 
     # One long push loop could in principle span more than one utterance,
     # so seq is only checked per-partial, not for a single 0..n run.
@@ -82,14 +83,12 @@ def test_push_and_close_both_deliver_partials_for_real_speech():
     assert transcript.text.strip() != ""
 
 
-def test_only_one_session_may_be_open_at_a_time():
+def test_several_sessions_may_be_open_at_once():
     with edge_stt.EdgeStt(model=model_path()) as stt:
         first = stt.open_session(vad_model=vad_model_path())
-        with pytest.raises(edge_stt.InvalidValueError):
-            stt.open_session(vad_model=vad_model_path())
+        second = stt.open_session(vad_model=vad_model_path())
         first.close()
-        # Freed by closing the first: a second one can now be opened.
-        stt.open_session(vad_model=vad_model_path()).close()
+        second.close()
 
 
 def test_boundaries_come_from_a_vad_model_or_the_caller_not_both():
@@ -105,8 +104,9 @@ def test_a_caller_bounded_session_delivers_only_at_close():
             chunk = 1_600 * 2
             for start in range(0, len(samples), chunk):
                 assert session.push(samples[start : start + chunk]) is None
-            transcript = session.close()
+            transcripts = session.close()
 
-    assert transcript is not None
+    assert len(transcripts) == 1
+    transcript = transcripts[0]
     assert transcript.audio_duration == pytest.approx(len(samples) / 32_000)
     assert transcript.text.strip() != ""

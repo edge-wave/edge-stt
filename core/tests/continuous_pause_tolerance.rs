@@ -26,7 +26,7 @@ fn feed_in_chunks(config: EndpointConfig, samples: &[i16]) -> Vec<String> {
             texts.push(transcript.text);
         }
     }
-    if let Some(transcript) = session.close(None).expect("a clean close") {
+    for transcript in session.close(None).expect("a clean close") {
         texts.push(transcript.text);
     }
     texts
@@ -39,9 +39,11 @@ fn a_shorter_configured_tolerance_splits_a_pause_a_longer_one_does_not() {
     // half -- no inserted silence needed to see the two behaviours.
     let (samples, _expected) = support::spoken_sample();
 
-    let strict = EndpointConfig::new(support::vad_model_path())
+    let strict = EndpointConfig::new()
+        .with_local_vad_model(support::vad_model_path())
         .with_pause_tolerance(Duration::from_millis(1_000));
-    let lenient = EndpointConfig::new(support::vad_model_path())
+    let lenient = EndpointConfig::new()
+        .with_local_vad_model(support::vad_model_path())
         .with_pause_tolerance(Duration::from_millis(2_000));
 
     let split = feed_in_chunks(strict, &samples);

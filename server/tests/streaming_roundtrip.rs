@@ -26,6 +26,33 @@ fn samples_to_bytes(samples: &[i16]) -> Vec<u8> {
 
 #[tokio::test]
 #[ignore = "needs a Whisper model and a VAD model"]
+async fn a_stream_that_names_no_boundaries_is_told_the_server_detects_them() {
+    let running = support::start_streaming(2).await;
+    let (mut socket, _) = tokio_tungstenite::connect_async(running.endpoint())
+        .await
+        .expect("a connection");
+    socket
+        .send(Message::Text(open_stream("echo").into()))
+        .await
+        .expect("a send");
+
+    let frame = tokio::time::timeout(Duration::from_secs(5), socket.next())
+        .await
+        .expect("a reply in time")
+        .expect("a frame")
+        .expect("a readable frame");
+    let reply: ServerMessage =
+        serde_json::from_str(&frame.into_text().expect("text")).expect("a server message");
+    match reply {
+        ServerMessage::Accepted { boundaries, .. } => {
+            assert_eq!(boundaries.as_deref(), Some("server"));
+        }
+        other => panic!("expected acceptance, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs a Whisper model and a VAD model"]
 async fn continuous_audio_over_the_wire_matches_the_on_device_text() {
     let running = support::start_streaming(2).await;
     let (mut socket, _) = tokio_tungstenite::connect_async(running.endpoint())

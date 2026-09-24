@@ -17,16 +17,25 @@ const DEFAULT_PAUSE_TOLERANCE: Duration = Duration::from_secs(3);
 /// utterance is already held to, rather than a second one.
 #[derive(Debug, Clone)]
 pub struct EndpointConfig {
-    pub vad_model: PathBuf,
+    /// The detector's model when a session runs on this device. A server
+    /// uses its own, so a session on the network path never reads this.
+    pub local_vad_model: Option<PathBuf>,
     pub pause_tolerance: Duration,
 }
 
 impl EndpointConfig {
-    pub fn new(vad_model: impl AsRef<Path>) -> Self {
+    pub fn new() -> Self {
         Self {
-            vad_model: vad_model.as_ref().to_path_buf(),
+            local_vad_model: None,
             pause_tolerance: DEFAULT_PAUSE_TOLERANCE,
         }
+    }
+
+    /// Needed for a session that opens on this device, including one
+    /// that falls back here because the server could not be reached.
+    pub fn with_local_vad_model(mut self, path: impl AsRef<Path>) -> Self {
+        self.local_vad_model = Some(path.as_ref().to_path_buf());
+        self
     }
 
     pub fn with_pause_tolerance(mut self, pause_tolerance: Duration) -> Self {
@@ -43,6 +52,12 @@ impl EndpointConfig {
             });
         }
         Ok(())
+    }
+}
+
+impl Default for EndpointConfig {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

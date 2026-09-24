@@ -93,7 +93,7 @@ fn main() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
-            let mut config = EndpointConfig::new(vad_model);
+            let mut config = EndpointConfig::new().with_local_vad_model(vad_model);
             if let Some(ms) = args.pause_tolerance_ms {
                 config = config.with_pause_tolerance(Duration::from_millis(ms));
             }
@@ -139,7 +139,7 @@ fn run_continuous(
             println!("{}", transcript.text);
         }
     }
-    if let Some(transcript) = session.close(None)? {
+    for transcript in session.close(None)? {
         println!("{}", transcript.text);
     }
     Ok(())

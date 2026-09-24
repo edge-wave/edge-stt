@@ -46,6 +46,17 @@ jobs:
       - run: cargo clippy -p edge-stt-core --all-targets --features streaming -- -D warnings
       - run: cargo test -p edge-stt-core --features streaming
 
+  thin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # A client that only talks to a server, built with no cmake at all.
+      - name: Sessions build without the on-device recognizer
+        continue-on-error: true
+        run: cargo check -p edge-stt-core --no-default-features --features remote,streaming
+
   offline:
     runs-on: ubuntu-latest
     steps:

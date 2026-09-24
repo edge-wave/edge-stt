@@ -28,20 +28,23 @@ pub struct WhisperVad {
 
 impl WhisperVad {
     pub fn load(config: &EndpointConfig) -> Result<Self> {
-        if !config.vad_model.is_file() {
-            return Err(Error::ModelMissing {
-                path: config.vad_model.clone(),
+        let Some(model) = config.local_vad_model.clone() else {
+            return Err(Error::InvalidValue {
+                setting: "local_vad_model",
+                expected: "a VAD model file for detecting boundaries on this device".to_string(),
+                got: "none".to_string(),
             });
+        };
+        if !model.is_file() {
+            return Err(Error::ModelMissing { path: model });
         }
 
-        let ctx = WhisperVadContext::new(
-            &config.vad_model.to_string_lossy(),
-            WhisperVadContextParams::default(),
-        )
-        .map_err(|why| Error::ModelUnusable {
-            path: config.vad_model.clone(),
-            why: why.to_string(),
-        })?;
+        let ctx =
+            WhisperVadContext::new(&model.to_string_lossy(), WhisperVadContextParams::default())
+                .map_err(|why| Error::ModelUnusable {
+                    path: model.clone(),
+                    why: why.to_string(),
+                })?;
 
         let mut vad_params = WhisperVadParams::new();
         let min_silence_ms = config.pause_tolerance.as_millis().min(i32::MAX as u128) as i32;
@@ -51,7 +54,7 @@ impl WhisperVad {
             ctx,
             vad_params,
             pause_tolerance_secs: config.pause_tolerance.as_secs_f64(),
-            model_path: config.vad_model.clone(),
+            model_path: model,
             pending: Vec::new(),
         })
     }
