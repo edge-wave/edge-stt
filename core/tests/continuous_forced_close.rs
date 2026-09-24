@@ -24,7 +24,7 @@ fn a_ceiling_shorter_than_the_speech_forces_a_close_without_calling_close() {
         .with_max_duration(Duration::from_secs(1));
     let stt = EdgeStt::new(config).expect("a model");
     let mut session = stt
-        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .open_session(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .expect("a session");
 
     let mut texts = Vec::new();

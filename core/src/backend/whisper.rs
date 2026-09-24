@@ -229,6 +229,7 @@ impl Backend for WhisperBackend {
             live_interims: true,
             revises: true,
             self_endpointing: false,
+            hosts_sessions: false,
         }
     }
 

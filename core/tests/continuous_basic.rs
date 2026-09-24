@@ -21,7 +21,7 @@ fn feed_in_chunks(samples: &[i16]) -> Vec<String> {
     const SIMULATED_CHUNK: usize = 1_600; // 100ms of 16kHz audio
     let stt = transcriber();
     let mut session = stt
-        .open_session(EndpointConfig::new(support::vad_model_path()))
+        .open_session(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .expect("a session");
     let mut texts = Vec::new();
     for chunk in samples.chunks(SIMULATED_CHUNK) {
@@ -29,7 +29,7 @@ fn feed_in_chunks(samples: &[i16]) -> Vec<String> {
             texts.push(transcript.text);
         }
     }
-    if let Some(transcript) = session.close(None).expect("a clean close") {
+    for transcript in session.close(None).expect("a clean close") {
         texts.push(transcript.text);
     }
     texts

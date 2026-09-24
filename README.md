@@ -71,13 +71,14 @@ own built-in Silero VAD support:
 ```rust
 use edge_stt_core::EndpointConfig;
 
-let mut session = stt.open_session(EndpointConfig::new("models/ggml-silero-v5.1.2.bin"))?;
+let detector = EndpointConfig::new().with_local_vad_model("models/ggml-silero-v5.1.2.bin");
+let mut session = stt.open_session(detector)?;
 for chunk in samples.chunks(1_600) {
     if let Some(transcript) = session.push(chunk, None)? {
         println!("{}", transcript.text);
     }
 }
-if let Some(transcript) = session.close(None)? {
+for transcript in session.close(None)? {
     println!("{}", transcript.text); // whatever was still in progress
 }
 ```
@@ -102,7 +103,7 @@ let mut session = stt.open_session(SessionConfig::new().with_caller_boundaries()
 for chunk in chunks_while_recording {
     session.push(chunk, None)?; // never ends an utterance on its own
 }
-let transcript = session.close(None)?; // speech ended: decode all of it
+let transcripts = session.close(None)?; // speech ended: one transcript, decoded whole
 ```
 
 No VAD model is needed, and the result is the same one handing the
@@ -119,9 +120,10 @@ carrying everything heard so far:
 ```rust
 use edge_stt_core::{PartialKind, SessionConfig};
 
+let detector = EndpointConfig::new().with_local_vad_model("models/ggml-silero-v5.1.2.bin");
 let mut session = stt.open_session(
     SessionConfig::new()
-        .with_endpointing(EndpointConfig::new("models/ggml-silero-v5.1.2.bin"))
+        .with_endpointing(detector)
         .with_live_interims(),
 )?;
 

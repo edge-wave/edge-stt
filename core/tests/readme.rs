@@ -48,13 +48,14 @@ fn the_continuous_example(
 ) -> edge_stt_core::Result<()> {
     use edge_stt_core::EndpointConfig;
 
-    let mut session = stt.open_session(EndpointConfig::new("models/ggml-silero-v5.1.2.bin"))?;
+    let detector = EndpointConfig::new().with_local_vad_model("models/ggml-silero-v5.1.2.bin");
+    let mut session = stt.open_session(detector)?;
     for chunk in samples.chunks(1_600) {
         if let Some(transcript) = session.push(chunk, None)? {
             println!("{}", transcript.text);
         }
     }
-    if let Some(transcript) = session.close(None)? {
+    for transcript in session.close(None)? {
         println!("{}", transcript.text);
     }
     Ok(())
@@ -84,9 +85,10 @@ fn the_live_interims_example(
 ) -> edge_stt_core::Result<()> {
     use edge_stt_core::{EndpointConfig, PartialKind, SessionConfig};
 
+    let detector = EndpointConfig::new().with_local_vad_model("models/ggml-silero-v5.1.2.bin");
     let mut session = stt.open_session(
         SessionConfig::new()
-            .with_endpointing(EndpointConfig::new("models/ggml-silero-v5.1.2.bin"))
+            .with_endpointing(detector)
             .with_live_interims(),
     )?;
 
@@ -109,9 +111,10 @@ fn the_examples_above_are_the_ones_the_readme_shows() {
         "let transcript = stt.transcribe(&Utterance::mono_16k(&samples))?;",
         "EdgeStt::new(Config::remote(RemoteConfig::at(\"ws://host:8000/api/v1/transcribe\")))?;",
         "stt.transcribe_with(&utterance, |p| print!(\"{}\", p.text), &cancel)?;",
-        "let mut session = stt.open_session(EndpointConfig::new(\"models/ggml-silero-v5.1.2.bin\"))?;",
+        "let detector = EndpointConfig::new().with_local_vad_model(\"models/ggml-silero-v5.1.2.bin\");",
+        "let mut session = stt.open_session(detector)?;",
         "if let Some(transcript) = session.push(chunk, None)? {",
-        "if let Some(transcript) = session.close(None)? {",
+        "for transcript in session.close(None)? {",
         "let mut session = stt.open_session(SessionConfig::new().with_caller_boundaries())?;",
         "        .with_live_interims(),",
         "    PartialKind::Replace => caption = partial.text,",

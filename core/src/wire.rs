@@ -44,8 +44,8 @@ pub enum ClientMessage {
         request_id: String,
     },
     /// Opens a continuous session: audio arrives as binary frames with
-    /// no predetermined end, and the server decides utterance
-    /// boundaries itself, sending `final` once per detected one.
+    /// no predetermined end, and `final` is sent once per utterance --
+    /// found by the server's detector, or ended by `close_stream`.
     OpenStream {
         request_id: String,
         format: WireFormat,
@@ -60,6 +60,10 @@ pub enum ClientMessage {
         live_interims: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         interim_min_interval_ms: Option<u64>,
+        /// `"server"` for the server's detector, `"caller"` to leave every
+        /// boundary to `close_stream`. Absent means `"server"`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        boundaries: Option<String>,
     },
     /// Clean shutdown of a continuous session: finalizes whatever
     /// utterance was in progress before the connection may close.
@@ -82,6 +86,10 @@ pub enum ServerMessage {
     Accepted {
         request_id: String,
         queue_position: u32,
+        /// For a stream, the boundaries actually applied. A server that
+        /// predates the choice leaves it out, which is how it is told apart.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        boundaries: Option<String>,
     },
     Partial {
         request_id: String,

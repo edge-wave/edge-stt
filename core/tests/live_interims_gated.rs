@@ -22,7 +22,7 @@ fn transcriber() -> EdgeStt {
 fn interims_for(samples: &[i16], interval: Duration) -> Vec<String> {
     let stt = transcriber();
     let config = SessionConfig::new()
-        .with_endpointing(EndpointConfig::new(support::vad_model_path()))
+        .with_endpointing(EndpointConfig::new().with_local_vad_model(support::vad_model_path()))
         .with_live_interims()
         .with_interim_min_interval(interval);
     let mut session = stt.open_session(config).expect("a session");

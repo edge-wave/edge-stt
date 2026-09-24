@@ -23,7 +23,7 @@ fn transcriber() -> EdgeStt {
 /// the last interim the caller was shown before each one landed.
 fn feed(samples: &[i16], live: bool) -> (Vec<String>, Vec<String>) {
     let stt = transcriber();
-    let endpointing = EndpointConfig::new(support::vad_model_path());
+    let endpointing = EndpointConfig::new().with_local_vad_model(support::vad_model_path());
     let config = match live {
         true => SessionConfig::new()
             .with_endpointing(endpointing)
@@ -42,7 +42,7 @@ fn feed(samples: &[i16], live: bool) -> (Vec<String>, Vec<String>) {
         }
     }
     let mut show = |partial: Partial| interims.push(partial.text);
-    if let Some(transcript) = session.close(Some(&mut show)).expect("a close") {
+    for transcript in session.close(Some(&mut show)).expect("a close") {
         finals.push(transcript.text);
     }
     (finals, interims)
