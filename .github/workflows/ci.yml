@@ -54,8 +54,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # A client that only talks to a server, built with no cmake at all.
       - name: Sessions build without the on-device recognizer
-        continue-on-error: true
-        run: cargo check -p edge-stt-core --no-default-features --features remote,streaming
+        run: |
+          cargo check -p edge-stt-core --no-default-features --features remote,streaming
+          if cargo tree -p edge-stt-core --no-default-features --features remote,streaming \
+              | grep -q whisper; then
+            echo "whisper reached a build that only talks to a server"
+            exit 1
+          fi
 
   offline:
     runs-on: ubuntu-latest

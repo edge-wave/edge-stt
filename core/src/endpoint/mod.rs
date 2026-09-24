@@ -74,5 +74,5 @@ pub trait Endpointer: Send {
     fn take_remainder(&mut self) -> Option<Vec<i16>>;
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(all(feature = "streaming", feature = "whisper"))]
 pub mod whisper_vad;
