@@ -201,9 +201,9 @@ typedef struct {
      */
     uintptr_t struct_size;
     /**
-     * A ggml VAD file -- a second, separate model from the one
-     * edge_stt_load_model loaded. NULL only where the model finds its
-     * own utterance boundaries, or where caller_boundaries is set.
+     * A ggml VAD file for finding boundaries on this device -- a second,
+     * separate model from the one edge_stt_load_model loaded. Never read
+     * by a session a server runs, which uses the server's own.
      */
     const char *vad_model;
     /**
@@ -228,6 +228,11 @@ typedef struct {
      * maximum duration. Cannot be combined with vad_model.
      */
     int32_t caller_boundaries;
+    /**
+     * Non-zero to have boundaries detected without naming vad_model,
+     * which a session a server runs does not need.
+     */
+    int32_t detect_boundaries;
 } edge_stt_session_opts;
 
 /**
@@ -294,6 +299,52 @@ int32_t edge_stt_set_timeout(edge_stt_h stt, uint64_t milliseconds);
  * @see edge_stt_new
  */
 int32_t edge_stt_load_model(edge_stt_h stt, const char *path);
+
+/**
+ * @brief Set the credential edge_stt_connect presents to the server.
+ *
+ * @param[in] stt the handle
+ * @param[in] credential the shared secret, or NULL for none
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_connect
+ */
+int32_t edge_stt_set_credential(edge_stt_h stt, const char *credential);
+
+/**
+ * @brief Give up on reaching the server after this long.
+ *
+ * @param[in] stt the handle
+ * @param[in] milliseconds the limit, or zero for the documented default
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_connect
+ */
+int32_t edge_stt_set_connect_timeout(edge_stt_h stt, uint64_t milliseconds);
+
+/**
+ * @brief Name a model to decode on this device when the server cannot
+ *        be reached. Without one, that failure is returned instead.
+ *
+ * @param[in] stt the handle
+ * @param[in] path the ggml file, loaded at edge_stt_connect, or NULL
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_connect
+ */
+int32_t edge_stt_set_fallback_model(edge_stt_h stt, const char *path);
+
+/**
+ * @brief Send recognition to a server instead of loading a model: the
+ *        counterpart of edge_stt_load_model for the network path.
+ *
+ * Uses the language, timeout, credential, connect timeout, and fallback
+ * model already set on the handle. A fallback model is loaded now; the
+ * server is first reached by a transcription or a session.
+ *
+ * @param[in] stt the handle
+ * @param[in] endpoint the server's websocket address
+ * @return #EDGE_STT_OK, or a negative #edge_stt_error.
+ * @see edge_stt_set_credential, edge_stt_set_fallback_model, edge_stt_new
+ */
+int32_t edge_stt_connect(edge_stt_h stt, const char *endpoint);
 
 /**
  * @brief Ask to be told about words as they are decoded.
@@ -503,6 +554,9 @@ int32_t edge_stt_session_push(edge_stt_session_h session, const int16_t *samples
  *
  * The utterance this finalizes decodes like any other: whatever is
  * registered with edge_stt_session_set_partial_cb still runs for it.
+ * Every transcript not yet delivered reaches the transcript callback,
+ * once each and in order; against a server finding its own boundaries
+ * there may be more than one.
  *
  * @param[in] session the handle
  * @return #EDGE_STT_OK, or a negative #edge_stt_error.

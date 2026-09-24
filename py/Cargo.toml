@@ -14,7 +14,7 @@ name = "edge_stt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-edge-stt-core = { workspace = true, features = ["streaming"] }
+edge-stt-core = { workspace = true, features = ["remote", "streaming"] }
 pyo3 = { workspace = true, features = ["extension-module", "abi3-py39"] }
 
 [build-dependencies]

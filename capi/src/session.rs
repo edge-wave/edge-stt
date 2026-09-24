@@ -79,9 +79,9 @@ fn borrow_core(parent: &crate::edge_stt_handle) -> Option<&'static EdgeStt> {
 pub struct edge_stt_session_opts {
     /// sizeof(edge_stt_session_opts), as the caller compiled it.
     pub struct_size: usize,
-    /// A ggml VAD file -- a second, separate model from the one
-    /// edge_stt_load_model loaded. NULL only where the model finds its
-    /// own utterance boundaries, or where caller_boundaries is set.
+    /// A ggml VAD file for finding boundaries on this device -- a second,
+    /// separate model from the one edge_stt_load_model loaded. Never read
+    /// by a session a server runs, which uses the server's own.
     pub vad_model: *const c_char,
     /// How long a pause must last before an utterance is considered
     /// finished, or zero for the documented default.
@@ -97,6 +97,9 @@ pub struct edge_stt_session_opts {
     /// utterance then ends only at edge_stt_session_close or at the
     /// maximum duration. Cannot be combined with vad_model.
     pub caller_boundaries: i32,
+    /// Non-zero to have boundaries detected without naming vad_model,
+    /// which a session a server runs does not need.
+    pub detect_boundaries: i32,
 }
 
 /// Reads as much of `opts` as both sides know about, leaving the rest
@@ -118,6 +121,7 @@ unsafe fn read_opts(opts: *const edge_stt_session_opts) -> Option<edge_stt_sessi
         live_interims: 0,
         interim_min_interval_ms: 0,
         caller_boundaries: 0,
+        detect_boundaries: 0,
     };
     let take = declared.min(std::mem::size_of::<edge_stt_session_opts>());
     unsafe {
@@ -166,21 +170,24 @@ pub unsafe extern "C" fn edge_stt_session_new(
     };
 
     let mut config = SessionConfig::new();
+    let detects = !opts.vad_model.is_null() || opts.detect_boundaries != 0;
     if opts.caller_boundaries != 0 {
-        if !opts.vad_model.is_null() {
+        if detects {
             fail_with(
                 edge_stt_error::EDGE_STT_INVALID_VALUE,
-                "set vad_model or caller_boundaries, not both",
+                "set caller_boundaries or a detector (vad_model, detect_boundaries), not both",
             );
             return std::ptr::null_mut();
         }
         config = config.with_caller_boundaries();
-    } else if !opts.vad_model.is_null() {
-        let vad_model = match required_str(opts.vad_model, "vad_model") {
-            Ok(path) => path,
-            Err(_) => return std::ptr::null_mut(),
-        };
-        let mut endpointing = EndpointConfig::new().with_local_vad_model(vad_model);
+    } else if detects {
+        let mut endpointing = EndpointConfig::new();
+        if !opts.vad_model.is_null() {
+            match required_str(opts.vad_model, "vad_model") {
+                Ok(path) => endpointing = endpointing.with_local_vad_model(path),
+                Err(_) => return std::ptr::null_mut(),
+            }
+        }
         if opts.pause_tolerance_ms > 0 {
             endpointing =
                 endpointing.with_pause_tolerance(Duration::from_millis(opts.pause_tolerance_ms));

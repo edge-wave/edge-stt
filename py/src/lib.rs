@@ -12,8 +12,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
 use edge_stt_core::{
-    CancelToken, Config, EdgeStt as Core, Error, Language, ModelSpec, Partial, Transcript,
-    Utterance,
+    CancelToken, Config, EdgeStt as Core, Error, Language, ModelSpec, Partial, RemoteConfig,
+    Transcript, Utterance,
 };
 
 create_exception!(edge_stt, EdgeSttError, PyException);
@@ -317,12 +317,59 @@ pub struct PyEdgeStt {
 
 #[pymethods]
 impl PyEdgeStt {
-    /// Loads the model now, so a missing file is an error here rather
-    /// than on the first spoken word.
+    /// Loads `model` now, so a missing file is an error here rather than
+    /// on the first spoken word -- or, given `server` instead, sends
+    /// recognition there, falling back to `fallback_model` if it is set
+    /// and the server cannot be reached.
     #[new]
-    #[pyo3(signature = (model, language = None, timeout = None))]
-    fn new(model: &str, language: Option<&str>, timeout: Option<f64>) -> PyResult<Self> {
-        let mut config = Config::local(ModelSpec::at(model));
+    #[pyo3(signature = (
+        model = None,
+        language = None,
+        timeout = None,
+        server = None,
+        credential = None,
+        connect_timeout = None,
+        fallback_model = None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        model: Option<&str>,
+        language: Option<&str>,
+        timeout: Option<f64>,
+        server: Option<&str>,
+        credential: Option<&str>,
+        connect_timeout: Option<f64>,
+        fallback_model: Option<&str>,
+    ) -> PyResult<Self> {
+        let mut config = match (model, server) {
+            (Some(path), None) => {
+                if credential.is_some() || connect_timeout.is_some() || fallback_model.is_some() {
+                    return Err(InvalidValueError::new_err(
+                        "credential, connect_timeout, and fallback_model go with server",
+                    ));
+                }
+                Config::local(ModelSpec::at(path))
+            }
+            (None, Some(endpoint)) => {
+                let mut remote = RemoteConfig::at(endpoint);
+                if let Some(secret) = credential {
+                    remote = remote.with_credential(secret);
+                }
+                if let Some(seconds) = connect_timeout {
+                    remote = remote.with_connect_timeout(Duration::from_secs_f64(seconds));
+                }
+                let mut config = Config::remote(remote);
+                if let Some(path) = fallback_model {
+                    config = config.with_fallback_to_local(ModelSpec::at(path));
+                }
+                config
+            }
+            _ => {
+                return Err(InvalidValueError::new_err(
+                    "pass exactly one of model and server",
+                ));
+            }
+        };
         if let Some(tag) = language {
             config = config.with_language(Language::new(tag));
         }
@@ -389,10 +436,10 @@ impl PyEdgeStt {
         })
     }
 
-    /// Opens a continuous session against a second, separate VAD
-    /// model file -- push samples to it as they arrive. Pass
-    /// `caller_boundaries=True` instead of a VAD model when the caller
-    /// already knows where speech stops: an utterance then ends only at
+    /// Opens a continuous session -- push samples to it as they arrive.
+    /// Boundaries come from a detector (`vad_model` on this device, or
+    /// `detect_boundaries=True` for a server's own), or from the caller
+    /// with `caller_boundaries=True`: an utterance then ends only at
     /// `close` or at the maximum duration. Ask for
     /// `live_interims` to also hear words while the speaker is still
     /// talking, which costs repeated recognition and so is not implied
@@ -403,7 +450,9 @@ impl PyEdgeStt {
         live_interims = false,
         interim_min_interval = None,
         caller_boundaries = false,
+        detect_boundaries = false,
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn open_session(
         &self,
         vad_model: Option<&str>,
@@ -411,25 +460,26 @@ impl PyEdgeStt {
         live_interims: bool,
         interim_min_interval: Option<f64>,
         caller_boundaries: bool,
+        detect_boundaries: bool,
     ) -> PyResult<PySession> {
         let mut config = edge_stt_core::SessionConfig::new();
-        match (vad_model, caller_boundaries) {
-            (Some(_), true) => {
-                return Err(InvalidValueError::new_err(
-                    "pass vad_model or caller_boundaries, not both",
-                ));
+        let detects = vad_model.is_some() || detect_boundaries;
+        if caller_boundaries && detects {
+            return Err(InvalidValueError::new_err(
+                "pass caller_boundaries or a detector (vad_model, detect_boundaries), not both",
+            ));
+        }
+        if caller_boundaries {
+            config = config.with_caller_boundaries();
+        } else if detects {
+            let mut endpointing = edge_stt_core::EndpointConfig::new();
+            if let Some(path) = vad_model {
+                endpointing = endpointing.with_local_vad_model(path);
             }
-            (Some(path), false) => {
-                let mut endpointing =
-                    edge_stt_core::EndpointConfig::new().with_local_vad_model(path);
-                if let Some(seconds) = pause_tolerance {
-                    endpointing =
-                        endpointing.with_pause_tolerance(Duration::from_secs_f64(seconds));
-                }
-                config = config.with_endpointing(endpointing);
+            if let Some(seconds) = pause_tolerance {
+                endpointing = endpointing.with_pause_tolerance(Duration::from_secs_f64(seconds));
             }
-            (None, true) => config = config.with_caller_boundaries(),
-            (None, false) => {}
+            config = config.with_endpointing(endpointing);
         }
         if live_interims {
             config = config.with_live_interims();

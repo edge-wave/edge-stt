@@ -84,6 +84,27 @@ int main(void) {
     both.caller_boundaries = 1;
     CHECK(edge_stt_session_new(stt, &both) == NULL);
     CHECK(strstr(edge_stt_get_last_error(), "caller_boundaries") != NULL);
+    edge_stt_session_opts both_ways = {0};
+    both_ways.struct_size = sizeof(both_ways);
+    both_ways.detect_boundaries = 1;
+    both_ways.caller_boundaries = 1;
+    CHECK(edge_stt_session_new(stt, &both_ways) == NULL);
+    CHECK(strstr(edge_stt_get_last_error(), "caller_boundaries") != NULL);
+
+    /* A server is named at connect and first reached when asked for something. */
+    edge_stt_h remote = edge_stt_new();
+    CHECK(edge_stt_set_credential(remote, NULL) == EDGE_STT_OK);
+    CHECK(edge_stt_set_connect_timeout(remote, 2000) == EDGE_STT_OK);
+    CHECK(edge_stt_set_fallback_model(remote, NULL) == EDGE_STT_OK);
+    CHECK(edge_stt_connect(remote, NULL) == EDGE_STT_NULL_ARGUMENT);
+    CHECK(edge_stt_connect(remote, "ws://127.0.0.1:1/api/v1/transcribe") == EDGE_STT_OK);
+    CHECK(edge_stt_transcribe(remote, samples, 16000, 16000, &out) == EDGE_STT_NETWORK);
+    edge_stt_session_opts caller = {0};
+    caller.struct_size = sizeof(caller);
+    caller.caller_boundaries = 1;
+    CHECK(edge_stt_session_new(remote, &caller) == NULL);
+    CHECK(strlen(edge_stt_get_last_error()) > 0);
+    edge_stt_free(remote);
 
     edge_stt_free(stt);
     printf("the C surface holds\n");
