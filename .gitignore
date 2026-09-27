@@ -2,6 +2,7 @@
 *.rs.bk
 .DS_Store
 /capi/docs
+__pycache__/
 
 # Model weights and recordings. The operator supplies both, and neither
 # belongs in a repository -- wherever in the tree they land.
@@ -10,9 +11,3 @@ models/
 *.gguf
 *.ggml
 *.wav
-
-# Notes and local tooling. They live beside the repository, not in it.
-/.claude
-/.specify
-/specs
-/CLAUDE.md
