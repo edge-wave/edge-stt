@@ -369,14 +369,14 @@ dependencies = [
 
 [[package]]
 name = "edge-stt-capi"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "edge-stt-core",
 ]
 
 [[package]]
 name = "edge-stt-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "futures-util",
  "hound",
@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "edge-stt-py"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "edge-stt-core",
  "pyo3",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "edge-stt-server"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "axum",
  "clap",
