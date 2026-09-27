@@ -46,7 +46,7 @@ above. The GGML conversion is published by `ggml-org` (whisper.cpp's own maintai
 model is MIT-licensed by the Silero Team (`snakers4/silero-vad`).
 
 Fetched and hashed directly (`https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin`)
-while validating User Story 1, since nothing in this repository automates it yet:
+when continuous input was first validated, since nothing in this repository automates it yet:
 
 `ggml-silero-v5.1.2.bin` SHA-256 `29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf`
 
