@@ -123,7 +123,7 @@ impl<'a> AudioSession<'a> {
             self.utterance.extend_from_slice(samples);
         }
 
-        if let Some(partial) = self.recognise_so_far()?
+        if let Some(partial) = self.recognise_so_far(on_partial.is_some())?
             && let Some(sink) = on_partial.as_deref_mut()
         {
             sink(partial);
@@ -190,8 +190,8 @@ impl<'a> AudioSession<'a> {
     /// Runs one pass over the utterance so far, when the caller asked
     /// for that and the gate says a pass is due. A pass that would be
     /// dropped is never paid for, which is most of the point on a
-    /// device.
-    fn recognise_so_far(&mut self) -> Result<Option<Partial>> {
+    /// device. Nor is one for a push that brought no callback.
+    fn recognise_so_far(&mut self, asked: bool) -> Result<Option<Partial>> {
         // Destructured so the decoder and the audio it reads are borrowed
         // from different fields rather than from the whole session.
         let Self {
@@ -200,6 +200,8 @@ impl<'a> AudioSession<'a> {
             gate,
             seq,
             wants_interims,
+            endpointer,
+            caller_bounded,
             ..
         } = self;
 
@@ -210,6 +212,13 @@ impl<'a> AudioSession<'a> {
             // Still pushed, because a decoder that finds its own
             // boundaries has to hear the audio to find them.
             decoder.push(utterance)?;
+            return Ok(None);
+        }
+        if !asked {
+            // A decoder that finds the boundaries must still hear the audio.
+            if endpointer.is_none() && !*caller_bounded {
+                decoder.push(utterance)?;
+            }
             return Ok(None);
         }
         let heard = utterance.len();
