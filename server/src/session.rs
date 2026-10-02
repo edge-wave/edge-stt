@@ -76,12 +76,15 @@ pub enum ContinuousEvent {
 /// Runs one continuous session's endpointing and decoding on a
 /// blocking thread, fed by `AudioInput` and reporting `ContinuousEvent`
 /// back -- the bridge a synchronous `AudioSession` needs in an async
-/// server. The channel closing (the client vanished) drops `session`
-/// without `close()`, discarding anything still in progress.
+/// server. Once nobody is reading the events (the client vanished),
+/// `session` is dropped without `close()` and any audio still queued is
+/// discarded. `permit` is held until then, so capacity counts decoding
+/// that is really happening rather than sockets that are still open.
 pub fn spawn_continuous(
     stt: std::sync::Arc<edge_stt_core::EdgeStt>,
     config: edge_stt_core::SessionConfig,
     want_partials: bool,
+    permit: tokio::sync::OwnedSemaphorePermit,
 ) -> (
     tokio::sync::mpsc::UnboundedSender<AudioInput>,
     tokio::sync::mpsc::UnboundedReceiver<ContinuousEvent>,
@@ -92,6 +95,7 @@ pub fn spawn_continuous(
     let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel::<ContinuousEvent>();
 
     tokio::task::spawn_blocking(move || {
+        let _permit = permit;
         let mut session = match stt.open_session(config) {
             Ok(session) => session,
             Err(why) => {
@@ -100,34 +104,48 @@ pub fn spawn_continuous(
             }
         };
 
-        while let Some(input) = audio_rx.blocking_recv() {
-            match input {
-                AudioInput::Chunk(samples) => {
-                    let mut sink = |p: Partial| {
-                        let _ = events_tx.send(ContinuousEvent::Partial(p));
-                    };
-                    let on_partial = want_partials.then_some(&mut sink as &mut dyn FnMut(Partial));
-                    match session.push(&samples, on_partial) {
-                        Ok(Some(transcript)) => {
-                            let _ = events_tx.send(ContinuousEvent::Final(transcript));
-                        }
-                        Ok(None) => {}
-                        Err(why) => {
-                            let _ = events_tx.send(ContinuousEvent::Error(why));
-                        }
-                    }
-                }
-                AudioInput::CleanClose => {
-                    let mut sink = |p: Partial| {
-                        let _ = events_tx.send(ContinuousEvent::Partial(p));
-                    };
-                    let on_partial = want_partials.then_some(&mut sink as &mut dyn FnMut(Partial));
-                    if let Ok(transcripts) = session.close(on_partial) {
-                        for transcript in transcripts {
-                            let _ = events_tx.send(ContinuousEvent::Final(transcript));
-                        }
-                    }
+        while let Some(first) = audio_rx.blocking_recv() {
+            // Words for audio that newer audio is already waiting behind
+            // are stale before they arrive, so only the newest gets a pass.
+            let mut waiting = vec![first];
+            while let Ok(next) = audio_rx.try_recv() {
+                waiting.push(next);
+            }
+            let newest = waiting
+                .iter()
+                .rposition(|input| matches!(input, AudioInput::Chunk(_)));
+
+            for (index, input) in waiting.into_iter().enumerate() {
+                if events_tx.is_closed() {
                     return;
+                }
+                let mut sink = |p: Partial| {
+                    let _ = events_tx.send(ContinuousEvent::Partial(p));
+                };
+                match input {
+                    AudioInput::Chunk(samples) => {
+                        let on_partial = (want_partials && Some(index) == newest)
+                            .then_some(&mut sink as &mut dyn FnMut(Partial));
+                        match session.push(&samples, on_partial) {
+                            Ok(Some(transcript)) => {
+                                let _ = events_tx.send(ContinuousEvent::Final(transcript));
+                            }
+                            Ok(None) => {}
+                            Err(why) => {
+                                let _ = events_tx.send(ContinuousEvent::Error(why));
+                            }
+                        }
+                    }
+                    AudioInput::CleanClose => {
+                        let on_partial =
+                            want_partials.then_some(&mut sink as &mut dyn FnMut(Partial));
+                        if let Ok(transcripts) = session.close(on_partial) {
+                            for transcript in transcripts {
+                                let _ = events_tx.send(ContinuousEvent::Final(transcript));
+                            }
+                        }
+                        return;
+                    }
                 }
             }
         }

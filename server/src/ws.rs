@@ -322,8 +322,8 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
     }
     let applied = Some(if caller_bounded { "caller" } else { "server" }.to_string());
 
-    // Held for the whole session: it counts as one client, not a
-    // per-utterance cost.
+    // Held for the whole session, until its decoding has stopped: it
+    // counts as one client, not a per-utterance cost.
     let permit = match server.capacity.admit().await {
         Admission::Started(permit) => {
             let accepted = ServerMessage::Accepted {
@@ -376,7 +376,8 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
         config = config.with_interim_min_interval(std::time::Duration::from_millis(ms));
     }
 
-    let (audio_tx, mut events_rx) = crate::session::spawn_continuous(stt, config, want_partials);
+    let (audio_tx, mut events_rx) =
+        crate::session::spawn_continuous(stt, config, want_partials, permit);
 
     loop {
         tokio::select! {
@@ -413,7 +414,6 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
             }
         }
     }
-    drop(permit);
 }
 
 fn error_from(request_id: &str, why: &Error) -> ServerMessage {
