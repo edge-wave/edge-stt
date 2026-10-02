@@ -449,6 +449,22 @@ mod tests {
     }
 
     #[test]
+    fn a_push_without_a_callback_runs_no_pass() {
+        let stt = able(&["and so", "and so my fellow"]);
+        let mut session = stt.open_session(brisk().with_caller_boundaries()).unwrap();
+
+        session.push(&quiet(1600), None).unwrap();
+        session.push(&quiet(1600), None).unwrap();
+        let mut seen: Vec<String> = Vec::new();
+        {
+            let mut sink = |partial: Partial| seen.push(partial.text);
+            session.push(&quiet(1600), Some(&mut sink)).unwrap();
+        }
+
+        assert_eq!(seen, vec!["and so"], "a pass nobody could see was paid for");
+    }
+
+    #[test]
     fn the_interval_holds_a_second_pass_back() {
         let stt = able(&["and so", "and so my fellow"]);
         let config = SessionConfig::new()
