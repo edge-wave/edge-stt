@@ -64,10 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.capacity,
         args.vad_model.clone(),
     );
+    // Printed rather than logged, because no logger is installed to show it.
     if let Some(threads) = args.threads {
         server = server.with_threads(threads);
-    } else if args.vad_model.is_some() {
-        log::warn!(
+    } else {
+        eprintln!(
             "no --threads: each session recognises on every core, which serves one live caller well and several badly"
         );
     }
