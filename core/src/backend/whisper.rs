@@ -304,6 +304,15 @@ impl WhisperBackend {
         let language = self.language.as_ref().map(|l| l.as_str().to_string());
         let context = &self.context;
         let model_path = self.model.path.clone();
+        let strategy = match self.model.beam_size {
+            Some(beam_size) if beam_size > 1 => SamplingStrategy::BeamSearch {
+                beam_size: i32::from(beam_size),
+                patience: -1.0,
+            },
+            _ => SamplingStrategy::Greedy { best_of: 1 },
+        };
+        // Null bytes would panic inside the library, so such a prompt is dropped.
+        let prompt = self.model.prompt.as_deref().filter(|p| !p.contains('\0'));
 
         let outcome = std::thread::scope(|scope| {
             let worker = scope.spawn(move || -> Result<Decoded> {
@@ -312,8 +321,11 @@ impl WhisperBackend {
                     why: why.to_string(),
                 })?;
 
-                let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+                let mut params = FullParams::new(strategy);
                 params.set_n_threads(threads);
+                if let Some(prompt) = prompt {
+                    params.set_initial_prompt(prompt);
+                }
                 params.set_print_special(false);
                 params.set_print_progress(false);
                 params.set_print_realtime(false);

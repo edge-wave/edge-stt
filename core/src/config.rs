@@ -134,6 +134,12 @@ pub struct ModelSpec {
     pub size_hint: Option<ModelSize>,
     pub threads: Option<u16>,
     pub accelerator: Option<Accelerator>,
+    /// How many candidates a finished utterance is decoded with; unset
+    /// or one decodes greedily. Words while speaking stay greedy.
+    pub beam_size: Option<u8>,
+    /// Words handed to every finished utterance as preceding text, so
+    /// names and commands the product expects are spelled its way.
+    pub prompt: Option<String>,
 }
 
 impl ModelSpec {
@@ -143,6 +149,8 @@ impl ModelSpec {
             size_hint: None,
             threads: None,
             accelerator: None,
+            beam_size: None,
+            prompt: None,
         }
     }
 
@@ -158,6 +166,16 @@ impl ModelSpec {
 
     pub fn with_accelerator(mut self, accelerator: Accelerator) -> Self {
         self.accelerator = Some(accelerator);
+        self
+    }
+
+    pub fn with_beam_size(mut self, beam_size: u8) -> Self {
+        self.beam_size = Some(beam_size);
+        self
+    }
+
+    pub fn with_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.prompt = Some(prompt.into());
         self
     }
 
