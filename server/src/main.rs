@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
+use edge_stt_core::Accelerator;
 use edge_stt_server::{Server, router};
 
 #[derive(Parser, Debug)]
@@ -42,6 +43,21 @@ struct Args {
     /// (open_stream) sessions; ordinary requests don't need it.
     #[arg(long)]
     vad_model: Option<PathBuf>,
+
+    /// Where the model runs: cpu, metal, cuda or vulkan. Anything but
+    /// cpu needs the server built with that feature.
+    #[arg(long, default_value = "cpu", value_parser = parse_accelerator)]
+    accelerator: Accelerator,
+}
+
+fn parse_accelerator(name: &str) -> Result<Accelerator, String> {
+    match name {
+        "cpu" => Ok(Accelerator::Cpu),
+        "metal" => Ok(Accelerator::Metal),
+        "cuda" => Ok(Accelerator::Cuda),
+        "vulkan" => Ok(Accelerator::Vulkan),
+        other => Err(format!("{other} is not cpu, metal, cuda or vulkan")),
+    }
 }
 
 #[tokio::main]
@@ -72,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "no --threads: each session recognises on every core, which serves one live caller well and several badly"
         );
     }
-    let server = Arc::new(server);
+    let server = Arc::new(server.with_accelerator(args.accelerator));
     server.load_model_in_background(&args.model);
 
     let address: SocketAddr = args.bind.parse()?;

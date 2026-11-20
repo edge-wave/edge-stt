@@ -12,7 +12,7 @@ use std::sync::{Arc, OnceLock};
 
 use axum::Router;
 use axum::routing::get;
-use edge_stt_core::{Config, EdgeStt, Language, ModelSpec};
+use edge_stt_core::{Accelerator, Config, EdgeStt, Language, ModelSpec};
 
 use capacity::Capacity;
 use health::Readiness;
@@ -31,6 +31,9 @@ pub struct Server {
     /// How many threads one recognition may use. Every session decodes
     /// with this, so it is what stops live callers oversubscribing.
     pub threads: Option<u16>,
+    /// Where the model runs. A build without that accelerator fails to
+    /// load rather than quietly decoding on the processor.
+    pub accelerator: Accelerator,
 }
 
 impl Server {
@@ -48,6 +51,7 @@ impl Server {
             readiness: Readiness::default(),
             vad_model,
             threads: None,
+            accelerator: Accelerator::Cpu,
         }
     }
 
@@ -55,6 +59,12 @@ impl Server {
     /// live sessions divides its cores instead of contending for them.
     pub fn with_threads(mut self, threads: u16) -> Self {
         self.threads = Some(threads);
+        self
+    }
+
+    /// Runs the model on this accelerator instead of the processor.
+    pub fn with_accelerator(mut self, accelerator: Accelerator) -> Self {
+        self.accelerator = accelerator;
         self
     }
 
@@ -68,7 +78,7 @@ impl Server {
         let server = Arc::clone(self);
         let model = model.to_path_buf();
         tokio::task::spawn_blocking(move || {
-            let mut spec = ModelSpec::at(&model);
+            let mut spec = ModelSpec::at(&model).with_accelerator(server.accelerator);
             if let Some(threads) = server.threads {
                 spec = spec.with_threads(threads);
             }

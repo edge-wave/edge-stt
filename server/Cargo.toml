@@ -17,6 +17,12 @@ path = "src/lib.rs"
 name = "edge-stt-server"
 path = "src/main.rs"
 
+[features]
+# Lets the server decode on a GPU when started with --accelerator.
+metal = ["edge-stt-core/metal"]
+cuda = ["edge-stt-core/cuda"]
+vulkan = ["edge-stt-core/vulkan"]
+
 [dependencies]
 edge-stt-core = { workspace = true, features = ["whisper", "remote", "streaming"] }
 axum = { workspace = true, features = ["ws"] }
