@@ -48,6 +48,16 @@ struct Args {
     /// cpu needs the server built with that feature.
     #[arg(long, default_value = "cpu", value_parser = parse_accelerator)]
     accelerator: Accelerator,
+
+    /// Decode each finished utterance with this many candidates instead
+    /// of greedily. Words sent while someone is speaking stay greedy.
+    #[arg(long, value_parser = clap::value_parser!(u8).range(1..=16))]
+    beam_size: Option<u8>,
+
+    /// A file of words the speakers are likely to say, handed to each
+    /// finished utterance as preceding text so they are spelled that way.
+    #[arg(long)]
+    prompt_file: Option<PathBuf>,
 }
 
 fn parse_accelerator(name: &str) -> Result<Accelerator, String> {
@@ -88,7 +98,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "no --threads: each session recognises on every core, which serves one live caller well and several badly"
         );
     }
-    let server = Arc::new(server.with_accelerator(args.accelerator));
+    let mut server = server.with_accelerator(args.accelerator);
+    if let Some(beam_size) = args.beam_size {
+        server = server.with_beam_size(beam_size);
+    }
+    if let Some(path) = &args.prompt_file {
+        let prompt = std::fs::read_to_string(path)?.trim().to_string();
+        if !prompt.is_empty() {
+            server = server.with_prompt(prompt);
+        }
+    }
+    let server = Arc::new(server);
     server.load_model_in_background(&args.model);
 
     let address: SocketAddr = args.bind.parse()?;

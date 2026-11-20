@@ -34,6 +34,10 @@ pub struct Server {
     /// Where the model runs. A build without that accelerator fails to
     /// load rather than quietly decoding on the processor.
     pub accelerator: Accelerator,
+    /// Candidates a finished utterance is decoded with; None is greedy.
+    pub beam_size: Option<u8>,
+    /// Words every finished utterance is told came before it.
+    pub prompt: Option<String>,
 }
 
 impl Server {
@@ -52,6 +56,8 @@ impl Server {
             vad_model,
             threads: None,
             accelerator: Accelerator::Cpu,
+            beam_size: None,
+            prompt: None,
         }
     }
 
@@ -68,6 +74,18 @@ impl Server {
         self
     }
 
+    /// Decodes each finished utterance with this many candidates.
+    pub fn with_beam_size(mut self, beam_size: u8) -> Self {
+        self.beam_size = Some(beam_size);
+        self
+    }
+
+    /// Hands this text to each finished utterance as what came before.
+    pub fn with_prompt(mut self, prompt: String) -> Self {
+        self.prompt = Some(prompt);
+        self
+    }
+
     pub fn transcriber(&self) -> Option<Arc<EdgeStt>> {
         self.stt.get().cloned()
     }
@@ -81,6 +99,12 @@ impl Server {
             let mut spec = ModelSpec::at(&model).with_accelerator(server.accelerator);
             if let Some(threads) = server.threads {
                 spec = spec.with_threads(threads);
+            }
+            if let Some(beam_size) = server.beam_size {
+                spec = spec.with_beam_size(beam_size);
+            }
+            if let Some(prompt) = server.prompt.clone() {
+                spec = spec.with_prompt(prompt);
             }
             let mut config = Config::local(spec);
             if let Some(tag) = server.language.clone() {
