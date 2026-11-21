@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use whisper_rs::{
     FullParams, SamplingStrategy, SegmentCallbackData, WhisperContext, WhisperContextParameters,
-    WhisperState, convert_integer_to_float_audio, get_lang_str,
+    WhisperState, convert_integer_to_float_audio, get_lang_id, get_lang_str,
 };
 
 use super::{Backend, Work};
@@ -32,7 +32,14 @@ pub struct WhisperBackend {
     context: WhisperContext,
     model: ModelSpec,
     language: Option<Language>,
+    other_languages: Vec<Language>,
+    /// The small model that picks the language, when one was given.
+    detector: Option<WhisperContext>,
 }
+
+/// How much likelier another candidate must be than the default language
+/// before a finished utterance is decoded in it.
+const SWITCH_RATIO: f32 = 2.0;
 
 /// Hands whisper.cpp's own running commentary to the `log` crate,
 /// which drops it unless a logger was installed. It goes to stderr
@@ -86,10 +93,28 @@ impl WhisperBackend {
             });
         }
 
+        let detector = match &model.language_model {
+            Some(path) if !config.other_languages.is_empty() => {
+                let mut parameters = WhisperContextParameters::new();
+                parameters.use_gpu(accelerator != Accelerator::Cpu);
+                Some(
+                    WhisperContext::new_with_params(path, parameters).map_err(|why| {
+                        Error::ModelUnusable {
+                            path: path.clone(),
+                            why: why.to_string(),
+                        }
+                    })?,
+                )
+            }
+            _ => None,
+        };
+
         Ok(Self {
             context,
             model: model.clone(),
             language: config.language.clone(),
+            other_languages: config.other_languages.clone(),
+            detector,
         })
     }
 
@@ -302,7 +327,13 @@ impl WhisperBackend {
         let deadline = work.timeout.map(|limit| started + limit);
         let threads = i32::from(self.model.thread_count());
         let language = self.language.as_ref().map(|l| l.as_str().to_string());
+        let others: Vec<String> = self
+            .other_languages
+            .iter()
+            .map(|l| l.as_str().to_string())
+            .collect();
         let context = &self.context;
+        let detector = self.detector.as_ref();
         let model_path = self.model.path.clone();
         let strategy = match self.model.beam_size {
             Some(beam_size) if beam_size > 1 => SamplingStrategy::BeamSearch {
@@ -321,6 +352,23 @@ impl WhisperBackend {
                     why: why.to_string(),
                 })?;
 
+                let language = match language {
+                    Some(primary) if !others.is_empty() => Some(match detector {
+                        Some(small) => match small.create_state() {
+                            Ok(mut probe) => {
+                                choose_language(&mut probe, audio, threads, primary, &others)
+                            }
+                            Err(why) => {
+                                log::warn!(
+                                    "the language model has no state, keeping {primary}: {why}"
+                                );
+                                primary
+                            }
+                        },
+                        None => choose_language(&mut state, audio, threads, primary, &others),
+                    }),
+                    other => other,
+                };
                 let mut params = FullParams::new(strategy);
                 params.set_n_threads(threads);
                 if let Some(prompt) = prompt {
@@ -480,4 +528,48 @@ fn check_accelerator(accelerator: Accelerator) -> Result<()> {
             got: accelerator.to_string(),
         })
     }
+}
+
+/// The candidate a finished utterance is spoken in: the default unless the
+/// model finds another clearly likelier. A failed detection keeps the default.
+fn choose_language(
+    state: &mut WhisperState,
+    audio: &[f32],
+    threads: i32,
+    primary: String,
+    others: &[String],
+) -> String {
+    let threads = usize::try_from(threads.max(1)).unwrap_or(1);
+    let probabilities = match state
+        .pcm_to_mel(audio, threads)
+        .and_then(|()| state.lang_detect(0, threads))
+    {
+        Ok((_, probabilities)) => probabilities,
+        Err(why) => {
+            log::warn!("language detection failed, keeping {primary}: {why}");
+            return primary;
+        }
+    };
+    let chance = |tag: &str| {
+        get_lang_id(tag)
+            .and_then(|id| usize::try_from(id).ok())
+            .and_then(|id| probabilities.get(id).copied())
+            .unwrap_or(0.0)
+    };
+    let primary_chance = chance(&primary);
+    let (best, best_chance) = others.iter().map(|tag| (tag, chance(tag))).fold(
+        (&primary, primary_chance),
+        |kept, next| {
+            if next.1 > kept.1 { next } else { kept }
+        },
+    );
+    let chosen = if *best != primary && best_chance > primary_chance * SWITCH_RATIO {
+        best.clone()
+    } else {
+        primary.clone()
+    };
+    log::info!(
+        "language {chosen} ({primary} {primary_chance:.3}, best other {best} {best_chance:.3})"
+    );
+    chosen
 }
