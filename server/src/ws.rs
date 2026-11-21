@@ -157,7 +157,7 @@ async fn run(socket: &mut WebSocket, server: &Arc<Server>, mut session: Session)
     };
 
     if let Some(asked) = &session.language
-        && server.language.as_deref() != Some(asked.as_str())
+        && !server.serves(asked)
     {
         let served = server.language.as_deref().unwrap_or("whatever it detects");
         let refusal = error_message(
@@ -298,7 +298,7 @@ async fn run_continuous(socket: &mut WebSocket, server: &Arc<Server>, request: S
     };
 
     if let Some(asked) = &language
-        && server.language.as_deref() != Some(asked.as_str())
+        && !server.serves(asked)
     {
         let served = server.language.as_deref().unwrap_or("whatever it detects");
         let refusal = error_message(

@@ -35,7 +35,8 @@ struct Args {
     #[arg(long)]
     threads: Option<u16>,
 
-    /// Force a language instead of detecting one.
+    /// Force a language instead of detecting one, or give several, such as
+    /// ko,en, to detect among them with the first as the default.
     #[arg(long)]
     language: Option<String>,
 
@@ -53,6 +54,11 @@ struct Args {
     /// of greedily. Words sent while someone is speaking stay greedy.
     #[arg(long, value_parser = clap::value_parser!(u8).range(1..=16))]
     beam_size: Option<u8>,
+
+    /// A small Whisper file that picks among several --language values,
+    /// so detection does not run the large model's encoder a second time.
+    #[arg(long)]
+    language_model: Option<PathBuf>,
 
     /// A file of words the speakers are likely to say, handed to each
     /// finished utterance as preceding text so they are spelled that way.
@@ -84,9 +90,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    let languages: Vec<String> = args
+        .language
+        .iter()
+        .flat_map(|list| list.split(','))
+        .map(|tag| tag.trim().to_string())
+        .filter(|tag| !tag.is_empty())
+        .collect();
     let mut server = Server::new(
         credential,
-        args.language.clone(),
+        languages.first().cloned(),
         args.capacity,
         args.vad_model.clone(),
     );
@@ -98,7 +111,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "no --threads: each session recognises on every core, which serves one live caller well and several badly"
         );
     }
-    let mut server = server.with_accelerator(args.accelerator);
+    let mut server = server
+        .with_accelerator(args.accelerator)
+        .with_other_languages(languages.iter().skip(1).cloned().collect());
+    if let Some(path) = args.language_model.clone() {
+        server = server.with_language_model(path);
+    }
     if let Some(beam_size) = args.beam_size {
         server = server.with_beam_size(beam_size);
     }

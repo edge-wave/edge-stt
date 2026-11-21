@@ -23,6 +23,10 @@ pub struct Server {
     /// The language this server was started with. A client asking for
     /// another one is refused rather than quietly given this.
     pub language: Option<String>,
+    /// Languages accepted besides `language`, detected per finished utterance.
+    pub other_languages: Vec<String>,
+    /// A small model that picks among the languages instead of the large one.
+    pub language_model: Option<std::path::PathBuf>,
     pub capacity: Capacity,
     pub readiness: Readiness,
     /// Needed only for continuous (open_stream) sessions; absent means
@@ -51,6 +55,8 @@ impl Server {
             stt: OnceLock::new(),
             credential,
             language,
+            other_languages: Vec::new(),
+            language_model: None,
             capacity: Capacity::new(capacity),
             readiness: Readiness::default(),
             vad_model,
@@ -86,6 +92,23 @@ impl Server {
         self
     }
 
+    /// Accepts these languages too, detecting which one each utterance is in.
+    pub fn with_other_languages(mut self, languages: Vec<String>) -> Self {
+        self.other_languages = languages;
+        self
+    }
+
+    /// Picks the language with this small model, which costs far less than the large one.
+    pub fn with_language_model(mut self, path: std::path::PathBuf) -> Self {
+        self.language_model = Some(path);
+        self
+    }
+
+    /// Whether a client asking for this language is served.
+    pub fn serves(&self, asked: &str) -> bool {
+        self.language.as_deref() == Some(asked) || self.other_languages.iter().any(|l| l == asked)
+    }
+
     pub fn transcriber(&self) -> Option<Arc<EdgeStt>> {
         self.stt.get().cloned()
     }
@@ -106,9 +129,20 @@ impl Server {
             if let Some(prompt) = server.prompt.clone() {
                 spec = spec.with_prompt(prompt);
             }
+            if let Some(path) = &server.language_model {
+                spec = spec.with_language_model(path);
+            }
             let mut config = Config::local(spec);
             if let Some(tag) = server.language.clone() {
                 config = config.with_language(Language::new(tag));
+                config = config.with_other_languages(
+                    server
+                        .other_languages
+                        .iter()
+                        .cloned()
+                        .map(Language::new)
+                        .collect(),
+                );
             }
             match EdgeStt::new(config) {
                 Ok(stt) => {

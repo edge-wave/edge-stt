@@ -140,6 +140,9 @@ pub struct ModelSpec {
     /// Words handed to every finished utterance as preceding text, so
     /// names and commands the product expects are spelled its way.
     pub prompt: Option<String>,
+    /// A small Whisper file that only tells which candidate language a
+    /// finished utterance is in, so detection skips the large encoder.
+    pub language_model: Option<PathBuf>,
 }
 
 impl ModelSpec {
@@ -151,6 +154,7 @@ impl ModelSpec {
             accelerator: None,
             beam_size: None,
             prompt: None,
+            language_model: None,
         }
     }
 
@@ -171,6 +175,11 @@ impl ModelSpec {
 
     pub fn with_beam_size(mut self, beam_size: u8) -> Self {
         self.beam_size = Some(beam_size);
+        self
+    }
+
+    pub fn with_language_model(mut self, path: impl AsRef<Path>) -> Self {
+        self.language_model = Some(path.as_ref().to_path_buf());
         self
     }
 
@@ -386,6 +395,9 @@ pub struct Config {
     pub backend: BackendChoice,
     pub fallback_to_local: Option<ModelSpec>,
     pub language: Option<Language>,
+    /// Languages a finished utterance may turn out to be besides `language`,
+    /// which stays the default whenever detection is not clearly for another.
+    pub other_languages: Vec<Language>,
     pub timeout: Option<Duration>,
     pub max_duration: Duration,
 }
@@ -404,6 +416,7 @@ impl Config {
             backend,
             fallback_to_local: None,
             language: None,
+            other_languages: Vec::new(),
             timeout: None,
             max_duration: Duration::from_secs(300),
         }
@@ -418,6 +431,11 @@ impl Config {
 
     pub fn with_language(mut self, language: Language) -> Self {
         self.language = Some(language);
+        self
+    }
+
+    pub fn with_other_languages(mut self, languages: Vec<Language>) -> Self {
+        self.other_languages = languages;
         self
     }
 
