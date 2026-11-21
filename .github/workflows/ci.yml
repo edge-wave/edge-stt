@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# whisper.cpp otherwise builds for the runner's own CPU, and a cached build
+# then dies with an illegal instruction on a runner that lacks those features.
+env:
+  GGML_NATIVE: "OFF"
+
 jobs:
   check:
     strategy:
@@ -23,6 +28,8 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-portable
       - run: cargo fmt --all --check
       # Not --all-features: that turns on CUDA and Vulkan, which need
       # toolchains no runner here has.
@@ -41,6 +48,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-portable
       # Isolated from `remote`: `full` already covers them combined,
       # this catches anything that only breaks with streaming alone.
       - run: cargo clippy -p edge-stt-core --all-targets --features streaming -- -D warnings
@@ -52,6 +61,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-portable
       # A client that only talks to a server, built with no cmake at all.
       - name: Sessions build without the on-device recognizer
         run: |
@@ -69,6 +80,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y cmake pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-portable
       # The offline claim, checked by the machine rather than by a
       # reviewer: no interfaces exist inside this namespace at all.
       # The binaries are run directly, because a nested sudo loses the
