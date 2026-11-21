@@ -78,6 +78,8 @@ fn parse_accelerator(name: &str) -> Result<Accelerator, String> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Info and above unless RUST_LOG says otherwise; whisper.cpp keeps writing to stderr itself.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse();
 
     let credential = match &args.credential_file {
@@ -103,11 +105,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.capacity,
         args.vad_model.clone(),
     );
-    // Printed rather than logged, because no logger is installed to show it.
     if let Some(threads) = args.threads {
         server = server.with_threads(threads);
     } else {
-        eprintln!(
+        log::warn!(
             "no --threads: each session recognises on every core, which serves one live caller well and several badly"
         );
     }

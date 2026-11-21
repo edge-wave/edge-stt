@@ -557,12 +557,11 @@ fn choose_language(
             .unwrap_or(0.0)
     };
     let primary_chance = chance(&primary);
-    let (best, best_chance) = others.iter().map(|tag| (tag, chance(tag))).fold(
-        (&primary, primary_chance),
-        |kept, next| {
-            if next.1 > kept.1 { next } else { kept }
-        },
-    );
+    let (best, best_chance) = others
+        .iter()
+        .map(|tag| (tag, chance(tag)))
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .unwrap_or((&primary, primary_chance));
     let chosen = if *best != primary && best_chance > primary_chance * SWITCH_RATIO {
         best.clone()
     } else {
